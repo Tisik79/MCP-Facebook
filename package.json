@@ -1,0 +1,24 @@
+{
+  "name": "facebook-ads-mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "build/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --outfile=build/index.js --platform=node --format=esm --log-level=info && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "start": "node build/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.9.0",
+    "axios": "^1.8.4",
+    "facebook-nodejs-business-sdk": "^22.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "esbuild": "^0.25.2",
+    "typescript": "^5.8.3"
+  }
+}

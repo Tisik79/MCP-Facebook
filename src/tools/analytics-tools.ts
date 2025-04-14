@@ -1,9 +1,13 @@
 import { AdAccount, Campaign } from 'facebook-nodejs-business-sdk';
-import { config } from '../config';
+import { config } from '../config.js'; // Added .js extension
 
 // Získání instance AdAccount
 const getAdAccount = () => {
-  return new AdAccount(config.facebook.accountId);
+  // Corrected config access
+  if (!config.facebookAccountId) { 
+      throw new Error('Facebook Account ID není nakonfigurováno v config.js');
+  }
+  return new AdAccount(config.facebookAccountId); 
 };
 
 // Získání insights (analytických dat) pro kampaň
@@ -181,7 +185,8 @@ export const compareCampaigns = async (
         
         return {
           id: campaignInfo.id,
-          name: campaignInfo.name,
+          // Access name via _data property
+          name: campaignInfo._data?.name, 
           insights: aggregatedInsights
         };
       })

@@ -1,9 +1,13 @@
 import { AdAccount, CustomAudience } from 'facebook-nodejs-business-sdk';
-import { config } from '../config';
+import { config } from '../config.js'; // Added .js extension
 
 // Získání instance AdAccount
 const getAdAccount = () => {
-  return new AdAccount(config.facebook.accountId);
+  // Corrected config access
+  if (!config.facebookAccountId) { 
+      throw new Error('Facebook Account ID není nakonfigurováno v config.js');
+  }
+  return new AdAccount(config.facebookAccountId); 
 };
 
 // Vytvoření vlastního publika
@@ -24,12 +28,13 @@ export const createCustomAudience = async (
       subtype
     };
     
-    // Vytvoření vlastního publika
-    const audience = await adAccount.createCustomAudience([params]);
+    // Vytvoření vlastního publika - pass params directly, not in array
+    const audience: CustomAudience = await adAccount.createCustomAudience([], params); 
     
     return {
       success: true,
-      audienceId: audience[0] ? audience[0].id : null,
+      // Access id via _data
+      audienceId: audience._data?.id, 
       message: 'Vlastní publikum bylo úspěšně vytvořeno'
     };
   } catch (error) {
@@ -67,20 +72,21 @@ export const getCustomAudiences = async (limit = 10) => {
     // Získání vlastních publik
     const audiences = await adAccount.getCustomAudiences(fields, params);
     
-    // Formátování výsledků
+    // Formátování výsledků - access properties via _data
     return {
       success: true,
-      audiences: audiences.map((audience: any) => ({
-        id: audience.id,
-        name: audience.name,
-        description: audience.description,
-        subtype: audience.subtype,
-        approximateCount: audience.approximate_count,
-        timeCreated: audience.time_created,
-        timeUpdated: audience.time_updated,
-        customerFileSource: audience.customer_file_source,
-        dataSource: audience.data_source,
-        rule: audience.rule
+      // Use 'any' type for audience in map to bypass type incompatibility for now
+      audiences: audiences.map((audience: any) => ({ 
+        id: audience.id, 
+        name: audience._data?.name,
+        description: audience._data?.description,
+        subtype: audience._data?.subtype,
+        approximateCount: audience._data?.approximate_count,
+        timeCreated: audience._data?.time_created,
+        timeUpdated: audience._data?.time_updated,
+        customerFileSource: audience._data?.customer_file_source,
+        dataSource: audience._data?.data_source,
+        rule: audience._data?.rule
       }))
     };
   } catch (error) {
@@ -116,22 +122,22 @@ export const getCustomAudienceDetails = async (audienceId: string) => {
     
     const audienceDetails = await customAudience.get(fields);
     
-    // Formátování výsledku
+    // Formátování výsledku - access properties via _data
     return {
       success: true,
       audience: {
-        id: audienceDetails.id,
-        name: audienceDetails.name,
-        description: audienceDetails.description,
-        subtype: audienceDetails.subtype,
-        approximateCount: audienceDetails.approximate_count,
-        timeCreated: audienceDetails.time_created,
-        timeUpdated: audienceDetails.time_updated,
-        customerFileSource: audienceDetails.customer_file_source,
-        dataSource: audienceDetails.data_source,
-        rule: audienceDetails.rule,
-        operationStatus: audienceDetails.operation_status,
-        permissionForActions: audienceDetails.permission_for_actions
+        id: audienceDetails.id, // ID is usually directly accessible
+        name: audienceDetails._data?.name,
+        description: audienceDetails._data?.description,
+        subtype: audienceDetails._data?.subtype,
+        approximateCount: audienceDetails._data?.approximate_count,
+        timeCreated: audienceDetails._data?.time_created,
+        timeUpdated: audienceDetails._data?.time_updated,
+        customerFileSource: audienceDetails._data?.customer_file_source,
+        dataSource: audienceDetails._data?.data_source,
+        rule: audienceDetails._data?.rule,
+        operationStatus: audienceDetails._data?.operation_status,
+        permissionForActions: audienceDetails._data?.permission_for_actions
       }
     };
   } catch (error) {
@@ -181,8 +187,8 @@ export const deleteCustomAudience = async (audienceId: string) => {
     // Získání objektu vlastního publika
     const customAudience = new CustomAudience(audienceId);
     
-    // Odstranění vlastního publika
-    await customAudience.delete();
+    // Odstranění vlastního publika - pass empty fields array
+    await customAudience.delete([]); 
     
     return {
       success: true,
@@ -229,12 +235,13 @@ export const createLookalikeAudience = async (
       })
     };
     
-    // Vytvoření lookalike audience
-    const result = await adAccount.createCustomAudience([params]);
+    // Vytvoření lookalike audience - pass params directly
+    const result: CustomAudience = await adAccount.createCustomAudience([], params); 
     
     return {
       success: true,
-      audienceId: result[0] ? result[0].id : null,
+      // Access id via _data
+      audienceId: result._data?.id, 
       message: 'Lookalike audience bylo úspěšně vytvořeno'
     };
   } catch (error) {
@@ -264,12 +271,15 @@ export const addUsersToCustomAudience = async (
       }
     };
     
-    // Přidání uživatelů do vlastního publika
-    await customAudience.addUsers(params);
+    // Přidání uživatelů do vlastního publika - Method addUsers does not exist
+    // await customAudience.addUsers(params); // Commenting out for now
+    console.warn(`Metoda addUsers není dostupná v aktuální verzi SDK nebo typových definicích. Přidávání uživatelů je třeba implementovat jinak.`);
     
+    // Returning success: false until implemented correctly
     return {
-      success: true,
-      message: 'Uživatelé byli úspěšně přidáni do vlastního publika'
+      success: false, // Indicate failure as the core action is commented out
+      message: 'Funkce pro přidání uživatelů není momentálně implementována/podporována.' 
+      // Removed duplicated success/message lines
     };
   } catch (error) {
     console.error('Chyba při přidávání uživatelů do vlastního publika:', error);

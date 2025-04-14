@@ -1,9 +1,13 @@
 import { AdAccount, Campaign } from 'facebook-nodejs-business-sdk';
-import { config } from '../config';
+import { config } from '../config.js'; // Added .js extension
 
 // Získání instance AdAccount
 const getAdAccount = () => {
-  return new AdAccount(config.facebook.accountId);
+  // Corrected config access
+  if (!config.facebookAccountId) { 
+      throw new Error('Facebook Account ID není nakonfigurováno v config.js');
+  }
+  return new AdAccount(config.facebookAccountId); 
 };
 
 // Vytvoření nové kampaně
@@ -39,11 +43,13 @@ export const createCampaign = async (
     }
     
     // Vytvoření kampaně
-    const result = await adAccount.createCampaign([params]);
+    // Pass params directly, not in array
+    const result: Campaign = await adAccount.createCampaign([], params); 
     
     return {
       success: true,
-      campaignId: result[0] ? result[0].id : null,
+      // Access id via _data
+      campaignId: result._data?.id, 
       message: 'Kampaň byla úspěšně vytvořena'
     };
   } catch (error) {
@@ -79,19 +85,20 @@ export const getCampaigns = async (limit = 10, status?: string) => {
     // Získání kampaní
     const campaigns = await adAccount.getCampaigns(fields, params);
     
-    // Formátování výsledků
+    // Formátování výsledků - access properties via _data
     return {
       success: true,
-      campaigns: campaigns.map((campaign: any) => ({
-        id: campaign.id,
-        name: campaign.name,
-        objective: campaign.objective,
-        status: campaign.status,
-        createdTime: campaign.created_time,
-        startTime: campaign.start_time,
-        stopTime: campaign.stop_time,
-        dailyBudget: campaign.daily_budget ? campaign.daily_budget / 100 : null, // Konverze z centů
-        lifetimeBudget: campaign.lifetime_budget ? campaign.lifetime_budget / 100 : null
+      // Use 'any' type for campaign in map to bypass type incompatibility for now
+      campaigns: campaigns.map((campaign: any) => ({ 
+        id: campaign.id, // ID is usually directly accessible
+        name: campaign._data?.name,
+        objective: campaign._data?.objective,
+        status: campaign._data?.status,
+        createdTime: campaign._data?.created_time,
+        startTime: campaign._data?.start_time,
+        stopTime: campaign._data?.stop_time,
+        dailyBudget: campaign._data?.daily_budget ? campaign._data.daily_budget / 100 : null, 
+        lifetimeBudget: campaign._data?.lifetime_budget ? campaign._data.lifetime_budget / 100 : null
       }))
     };
   } catch (error) {
@@ -154,23 +161,23 @@ export const getCampaignDetails = async (campaignId: string) => {
     
     const campaignDetails = await campaign.get(fields);
     
-    // Formátování výsledku
+    // Formátování výsledku - access properties via _data
     return {
       success: true,
       campaign: {
-        id: campaignDetails.id,
-        name: campaignDetails.name,
-        objective: campaignDetails.objective,
-        status: campaignDetails.status,
-        createdTime: campaignDetails.created_time,
-        startTime: campaignDetails.start_time,
-        stopTime: campaignDetails.stop_time,
-        dailyBudget: campaignDetails.daily_budget ? campaignDetails.daily_budget / 100 : null,
-        lifetimeBudget: campaignDetails.lifetime_budget ? campaignDetails.lifetime_budget / 100 : null,
-        spendCap: campaignDetails.spend_cap ? campaignDetails.spend_cap / 100 : null,
-        budgetRemaining: campaignDetails.budget_remaining ? campaignDetails.budget_remaining / 100 : null,
-        buyingType: campaignDetails.buying_type,
-        specialAdCategories: campaignDetails.special_ad_categories
+        id: campaignDetails.id, // ID is usually directly accessible
+        name: campaignDetails._data?.name,
+        objective: campaignDetails._data?.objective,
+        status: campaignDetails._data?.status,
+        createdTime: campaignDetails._data?.created_time,
+        startTime: campaignDetails._data?.start_time,
+        stopTime: campaignDetails._data?.stop_time,
+        dailyBudget: campaignDetails._data?.daily_budget ? campaignDetails._data.daily_budget / 100 : null,
+        lifetimeBudget: campaignDetails._data?.lifetime_budget ? campaignDetails._data.lifetime_budget / 100 : null,
+        spendCap: campaignDetails._data?.spend_cap ? campaignDetails._data.spend_cap / 100 : null,
+        budgetRemaining: campaignDetails._data?.budget_remaining ? campaignDetails._data.budget_remaining / 100 : null,
+        buyingType: campaignDetails._data?.buying_type,
+        specialAdCategories: campaignDetails._data?.special_ad_categories
       }
     };
   } catch (error) {
@@ -188,8 +195,8 @@ export const deleteCampaign = async (campaignId: string) => {
     // Získání objektu kampaně
     const campaign = new Campaign(campaignId);
     
-    // Odstranění kampaně (ve skutečnosti je nastavena jako smazaná, ale zůstává v systému)
-    await campaign.delete();
+    // Odstranění kampaně - pass empty fields array
+    await campaign.delete([]); 
     
     return {
       success: true,

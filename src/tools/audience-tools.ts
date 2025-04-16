@@ -28,14 +28,26 @@ export const createCustomAudience = async (
       subtype
     };
     
-    // Vytvoření vlastního publika - pass params directly, not in array
-    const audience: CustomAudience = await adAccount.createCustomAudience([], params); 
+    // Define fields to retrieve after creation
+    const fieldsToRead = ['id', 'name', 'description', 'subtype', 'approximate_count'];
+
+    // Vytvoření vlastního publika and request fields in response
+    const audience: CustomAudience = await adAccount.createCustomAudience(fieldsToRead, params); 
     
+    // The result object itself should now contain the requested fields
+    const audienceData = {
+        id: audience.id, // ID should be directly accessible
+        name: audience._data?.name,
+        description: audience._data?.description,
+        subtype: audience._data?.subtype,
+        approximateCount: audience._data?.approximate_count,
+    };
+
     return {
       success: true,
-      // Access id via _data
-      audienceId: audience._data?.id, 
-      message: 'Vlastní publikum bylo úspěšně vytvořeno'
+      audienceId: audienceData.id, // Keep audienceId for consistency
+      audienceData: audienceData, // Return the fetched data
+      message: 'Vlastní publikum bylo úspěšně vytvořeno a data načtena.'
     };
   } catch (error) {
     console.error('Chyba při vytváření vlastního publika:', error);
@@ -51,18 +63,14 @@ export const getCustomAudiences = async (limit = 10) => {
   try {
     const adAccount = getAdAccount();
     
-    // Nastavení polí pro získání vlastních publik
+    // Nastavení polí pro získání vlastních publik - optimalizovaná pole
     const fields = [
       'id', 
       'name', 
       'description', 
       'subtype', 
-      'approximate_count', 
-      'time_created', 
-      'time_updated',
-      'customer_file_source',
-      'data_source',
-      'rule'
+      'approximate_count'
+      // Removed unused fields: time_created, time_updated, customer_file_source, data_source, rule
     ];
     
     const params = {
@@ -81,12 +89,8 @@ export const getCustomAudiences = async (limit = 10) => {
         name: audience._data?.name,
         description: audience._data?.description,
         subtype: audience._data?.subtype,
-        approximateCount: audience._data?.approximate_count,
-        timeCreated: audience._data?.time_created,
-        timeUpdated: audience._data?.time_updated,
-        customerFileSource: audience._data?.customer_file_source,
-        dataSource: audience._data?.data_source,
-        rule: audience._data?.rule
+        approximateCount: audience._data?.approximate_count
+        // Removed unused fields from mapping
       }))
     };
   } catch (error) {
@@ -235,14 +239,26 @@ export const createLookalikeAudience = async (
       })
     };
     
-    // Vytvoření lookalike audience - pass params directly
-    const result: CustomAudience = await adAccount.createCustomAudience([], params); 
+    // Define fields to retrieve after creation
+    const fieldsToReadLookalike = ['id', 'name', 'description', 'subtype', 'approximate_count'];
+
+    // Vytvoření lookalike audience and request fields in response
+    const result: CustomAudience = await adAccount.createCustomAudience(fieldsToReadLookalike, params); 
     
+    // The result object itself should now contain the requested fields
+    const lookalikeData = {
+        id: result.id, // ID should be directly accessible
+        name: result._data?.name,
+        description: result._data?.description,
+        subtype: result._data?.subtype,
+        approximateCount: result._data?.approximate_count,
+    };
+
     return {
       success: true,
-      // Access id via _data
-      audienceId: result._data?.id, 
-      message: 'Lookalike audience bylo úspěšně vytvořeno'
+      audienceId: lookalikeData.id, // Keep audienceId for consistency
+      audienceData: lookalikeData, // Return the fetched data
+      message: 'Lookalike audience bylo úspěšně vytvořeno a data načtena.'
     };
   } catch (error) {
     console.error('Chyba při vytváření lookalike audience:', error);

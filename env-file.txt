@@ -1,8 +1,0 @@
-# Facebook API přístupové údaje
-FACEBOOK_APP_ID=your_app_id
-FACEBOOK_APP_SECRET=your_app_secret
-FACEBOOK_ACCESS_TOKEN=your_access_token
-FACEBOOK_ACCOUNT_ID=your_ad_account_id
-
-# MCP Server nastavení
-PORT=3000

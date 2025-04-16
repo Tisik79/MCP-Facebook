@@ -42,8 +42,8 @@ Tento MCP server poskytuje rozhraní pro komunikaci s Facebook Marketing API pom
 
 1. Klonujte repozitář:
 ```bash
-git clone https://github.com/yourusername/facebook-ads-mcp-server.git
-cd facebook-ads-mcp-server
+git clone https://github.com/Tisik79/MCP-Facebook.git
+cd MCP-Facebook
 ```
 
 2. Nainstalujte závislosti:
@@ -81,29 +81,47 @@ Pro použití tohoto MCP serveru s Claude Desktop přidejte následující konfi
       "command": "node",
       "args": ["cesta/k/facebook-ads-mcp-server/dist/index.js"],
       "env": {
-        "FACEBOOK_APP_ID": "your_app_id",
-        "FACEBOOK_APP_SECRET": "your_app_secret",
-        "FACEBOOK_ACCESS_TOKEN": "your_access_token",
-        "FACEBOOK_ACCOUNT_ID": "your_ad_account_id"
+        "FACEBOOK_APP_ID": "<YOUR_APP_ID>",
+        "FACEBOOK_APP_SECRET": "<YOUR_APP_SECRET>",
+        "FACEBOOK_ACCESS_TOKEN": "<YOUR_ACCESS_TOKEN>",
+        "FACEBOOK_ACCOUNT_ID": "<YOUR_AD_ACCOUNT_ID>"
       }
     }
   }
 }
 ```
 
-## Použití
+## Dostupné nástroje
 
-### Vytvoření reklamní kampaně
+### Nástroje pro správu kampaní
+- `create_campaign` - Vytvoření nové reklamní kampaně
+- `get_campaigns` - Získání seznamu kampaní
+- `get_campaign_details` - Získání detailů o kampani
+- `update_campaign` - Aktualizace kampaně
+- `delete_campaign` - Odstranění kampaně
 
-Požádejte Claude AI o vytvoření nové reklamní kampaně. Claude může použít nástroj `create_campaign` k vytvoření kampaně přes Facebook API.
+### Nástroje pro analýzu a vyhodnocování
+- `get_campaign_insights` - Získání analytických dat o kampani
+- `get_account_insights` - Získání souhrnných dat o účtu
+- `compare_campaigns` - Porovnání více kampaní
+- `get_campaign_demographics` - Získání demografických údajů
 
-Příklad konverzace:
-```
-Uživatel: Vytvoř mi novou kampaň pro propagaci našeho e-shopu. Cílem je zvýšit prodeje. Denní rozpočet je 1000 Kč.
+### Nástroje pro správu publik
+- `create_custom_audience` - Vytvoření vlastního publika
+- `get_custom_audiences` - Získání seznamu publik
+- `create_lookalike_audience` - Vytvoření lookalike publika
+- `add_users_to_custom_audience` - Přidání uživatelů do publika
 
-Claude: Připravím návrh nové reklamní kampaně pro váš e-shop...
-```
+## Bezpečnost
 
-### Analýza výkonu kampaní
+Tento MCP server vyžaduje přístup k vašemu Facebook Business Manager účtu prostřednictvím přístupového tokenu. Zajistěte, aby tento token byl bezpečně uložen a nebyl sdílen s neoprávněnými osobami.
 
-Požádejte Claude AI o analýzu výkonu
+Pro produkční nasazení doporučujeme:
+- Používat token s minimálními potřebnými oprávněními
+- Používat proměnné prostředí pro citlivé údaje
+- Pravidelně obnovovat přístupové tokeny
+- Implementovat další vrstvy zabezpečení (firewall, VPN)
+
+## Licence
+
+Distribuováno pod licencí MIT.

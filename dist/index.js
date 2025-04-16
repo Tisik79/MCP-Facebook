@@ -41,6 +41,7 @@ const config_js_1 = require("./config.js");
 const campaignTools = __importStar(require("./tools/campaign-tools.js"));
 const audienceTools = __importStar(require("./tools/audience-tools.js"));
 const analyticsTools = __importStar(require("./tools/analytics-tools.js"));
+const adSetTools = __importStar(require("./tools/adset-tools.js")); // Import new adset tools
 const campaign_templates_js_1 = require("./prompts/campaign-templates.js");
 // Funkce pro inicializaci serveru
 const initializeServer = async () => {
@@ -69,18 +70,33 @@ const initializeServer = async () => {
     // Pass the raw shape object directly, not z.object()
     {
         name: zod_1.z.string().describe('Název kampaně'),
-        objective: zod_1.z.string().describe('Cíl kampaně (např. REACH, LINK_CLICKS, CONVERSIONS)'),
-        status: zod_1.z.string().describe('Status kampaně (ACTIVE, PAUSED)'),
-        dailyBudget: zod_1.z.string().optional().describe('Denní rozpočet v měně účtu (např. "1000.50")'),
+        // Removed duplicated objective, status, dailyBudget lines below
+        objective: zod_1.z.string().describe('Cíl kampaně (POVOLENÉ HODNOTY: OUTCOME_LEADS, OUTCOME_SALES, OUTCOME_ENGAGEMENT, OUTCOME_AWARENESS, OUTCOME_TRAFFIC, OUTCOME_APP_PROMOTION)'), // Keep the updated description
+        status: zod_1.z.string().describe('Status kampaně (ACTIVE, PAUSED)'), // Keep one status line
+        dailyBudget: zod_1.z.string().optional().describe('Denní rozpočet v měně účtu (např. "1000.50")'), // Keep one dailyBudget line
         startTime: zod_1.z.string().optional().describe('Čas začátku kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
-        endTime: zod_1.z.string().optional().describe('Čas konce kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)')
+        endTime: zod_1.z.string().optional().describe('Čas konce kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
+        // Made special_ad_categories required and non-empty
+        special_ad_categories: zod_1.z.array(zod_1.z.string()).nonempty().describe('Speciální kategorie reklam (POVINNÉ, MUSÍ obsahovat alespoň jednu platnou hodnotu, např. ["HOUSING"], ["EMPLOYMENT"], ["CREDIT"], ["ISSUES_ELECTIONS_POLITICS"])')
     }, 
     // Destructure arguments directly in the handler signature
-    async ({ name, objective, status, dailyBudget, startTime, endTime }) => {
-        const result = await campaignTools.createCampaign(name, objective, status, dailyBudget ? parseFloat(dailyBudget) : undefined, startTime, endTime);
+    async ({ name, objective, status, dailyBudget, startTime, endTime, special_ad_categories }) => {
+        const result = await campaignTools.createCampaign(name, objective, status, dailyBudget ? parseFloat(dailyBudget) : undefined, startTime, endTime, special_ad_categories // Pass the new parameter
+        );
+        // Adjust the response text to include details from result.campaignData
+        let campaignResponseText = result.success
+            ? `Kampaň byla úspěšně vytvořena (ID: ${result.campaignId}).\n\n`
+            : `Chyba při vytváření kampaně: ${result.message}`;
+        if (result.success && result.campaignData) {
+            campaignResponseText += `Detaily:\n` +
+                `  - Název: ${result.campaignData.name}\n` +
+                `  - Cíl: ${result.campaignData.objective}\n` +
+                `  - Status: ${result.campaignData.status}\n` +
+                (result.campaignData.dailyBudget ? `  - Denní rozpočet: ${result.campaignData.dailyBudget}\n` : '') +
+                (result.campaignData.createdTime ? `  - Vytvořeno: ${new Date(result.campaignData.createdTime).toLocaleString()}\n` : '');
+        }
         return {
-            // Removed leading emojis
-            content: [{ type: 'text', text: result.success ? `Kampaň byla úspěšně vytvořena!\n\nID kampaně: ${result.campaignId}\n\n${result.message || ''}` : `Chyba při vytváření kampaně: ${result.message}` }]
+            content: [{ type: 'text', text: campaignResponseText }]
         };
     });
     server.tool('get_campaigns', {
@@ -235,10 +251,10 @@ const initializeServer = async () => {
     // --- Registrace nástrojů pro správu publik ---
     server.tool('create_custom_audience', {
         name: zod_1.z.string().describe('Název publika'),
-        subtype: zod_1.z.string().describe('Podtyp publika (např. CUSTOM, WEBSITE, ENGAGEMENT, LOOKALIKE)'),
+        subtype: zod_1.z.string().describe('Podtyp publika (CUSTOM, WEBSITE, ENGAGEMENT). Pro LOOKALIKE použij nástroj create_lookalike_audience.'), // Clarified subtype usage
         description: zod_1.z.string().optional().describe('Volitelný popis publika'),
-        customer_file_source: zod_1.z.string().optional().describe('Zdroj dat pro CUSTOM subtype (např. USER_PROVIDED_ONLY, PARTNER_PROVIDED_ONLY)'),
-        rule: zod_1.z.object({}).passthrough().optional().describe('Pravidlo pro WEBSITE nebo ENGAGEMENT subtype (JSON objekt dle FB API)')
+        customer_file_source: zod_1.z.string().optional().describe('Zdroj dat pro CUSTOM subtype (POVINNÉ pro CUSTOM, např. USER_PROVIDED_ONLY)'), // Clarified requirement
+        rule: zod_1.z.object({}).passthrough().optional().describe('Pravidlo pro WEBSITE nebo ENGAGEMENT subtype (POVINNÉ pro WEBSITE/ENGAGEMENT, komplexní JSON objekt dle FB API - viz dokumentace)') // Clarified requirement and complexity
     }, async ({ name, subtype, description, customer_file_source, rule }) => {
         if (subtype === 'CUSTOM' && (!description || !customer_file_source)) {
             // Throw standard Error or handle appropriately
@@ -248,9 +264,19 @@ const initializeServer = async () => {
         const result = await audienceTools.createCustomAudience(name, description || '', customer_file_source || '', subtype
         // Pass rule if the underlying function supports it
         );
+        // Adjust the response text to include details from result.audienceData
+        let audienceResponseText = result.success
+            ? `Vlastní publikum "${name}" (typ: ${subtype}) bylo úspěšně vytvořeno (ID: ${result.audienceId}).\n\n`
+            : `Chyba při vytváření publika: ${result.message}`;
+        if (result.success && result.audienceData) {
+            audienceResponseText += `Detaily:\n` +
+                `  - Název: ${result.audienceData.name}\n` +
+                `  - Popis: ${result.audienceData.description || '-'}\n` +
+                `  - Subtyp: ${result.audienceData.subtype}\n` +
+                `  - Přibližná velikost: ${result.audienceData.approximateCount || 'N/A'}\n`;
+        }
         return {
-            // Removed leading emojis
-            content: [{ type: 'text', text: result.success ? `Vlastní publikum "${name}" (typ: ${subtype}) vytvořeno (ID: ${result.audienceId}). ${result.message || ''}` : `Chyba: ${result.message}` }]
+            content: [{ type: 'text', text: audienceResponseText }]
         };
     });
     server.tool('get_audiences', {
@@ -274,14 +300,89 @@ const initializeServer = async () => {
         }
         return { content: [{ type: 'text', text: responseText }] };
     });
+    server.tool('create_lookalike_audience', // Tool specifically for Lookalike audiences
+    {
+        sourceAudienceId: zod_1.z.string().describe('ID zdrojového Custom Audience (musí existovat)'),
+        name: zod_1.z.string().describe('Název nového Lookalike Audience'),
+        description: zod_1.z.string().optional().describe('Volitelný popis Lookalike Audience'),
+        country: zod_1.z.string().length(2).describe('Kód země (ISO 3166-1 alpha-2), pro kterou se má Lookalike vytvořit (např. "US", "CZ")'),
+        ratio: zod_1.z.number().min(0.01).max(0.2).optional().describe('Poměr podobnosti (1-20%), např. 0.01 pro 1%. Výchozí je 0.01.')
+    }, async ({ sourceAudienceId, name, description, country, ratio }) => {
+        const result = await audienceTools.createLookalikeAudience(sourceAudienceId, name, description || '', // Pass empty string if undefined
+        country, ratio // Pass ratio, function has default
+        );
+        // Adjust the response text to include details from result.audienceData
+        let lookalikeResponseText = result.success
+            ? `Lookalike publikum "${name}" bylo úspěšně vytvořeno (ID: ${result.audienceId}).\n\n`
+            : `Chyba při vytváření lookalike publika: ${result.message}`;
+        if (result.success && result.audienceData) {
+            lookalikeResponseText += `Detaily:\n` +
+                `  - Název: ${result.audienceData.name}\n` +
+                `  - Popis: ${result.audienceData.description || '-'}\n` +
+                `  - Subtyp: ${result.audienceData.subtype}\n` +
+                `  - Přibližná velikost: ${result.audienceData.approximateCount || 'N/A'}\n`;
+        }
+        return {
+            content: [{ type: 'text', text: lookalikeResponseText }]
+        };
+    });
+    // --- Registrace nástrojů pro Ad Sets ---
+    server.tool('create_ad_set', {
+        campaignId: zod_1.z.string().describe('ID kampaně, pod kterou sada patří'),
+        name: zod_1.z.string().describe('Název reklamní sady'),
+        status: zod_1.z.string().describe('Status sady (ACTIVE, PAUSED, ARCHIVED)'),
+        targeting: zod_1.z.any().describe('Specifikace cílení (komplexní objekt, viz FB dokumentace)'), // Using z.any() for complex targeting
+        optimizationGoal: zod_1.z.string().describe('Cíl optimalizace (např. REACH, OFFSITE_CONVERSIONS)'),
+        billingEvent: zod_1.z.string().describe('Událost pro účtování (např. IMPRESSIONS, LINK_CLICKS)'),
+        bidAmount: zod_1.z.number().int().positive().optional().describe('Nabídka v centech (volitelné)'),
+        dailyBudget: zod_1.z.number().int().positive().optional().describe('Denní rozpočet v centech (volitelné)'),
+        lifetimeBudget: zod_1.z.number().int().positive().optional().describe('Celoživotní rozpočet v centech (volitelné)'),
+        startTime: zod_1.z.string().datetime({ offset: true }).optional().describe('Čas začátku (ISO 8601, volitelné)'),
+        endTime: zod_1.z.string().datetime({ offset: true }).optional().describe('Čas konce (ISO 8601, volitelné)')
+    }, async (params) => {
+        // Basic validation for budget (either daily or lifetime must be set)
+        if (!params.dailyBudget && !params.lifetimeBudget) {
+            throw new Error('Musí být nastaven alespoň denní nebo celoživotní rozpočet.');
+        }
+        if (params.dailyBudget && params.lifetimeBudget) {
+            throw new Error('Nelze nastavit současně denní i celoživotní rozpočet.');
+        }
+        const result = await adSetTools.createAdSet(params.campaignId, params.name, params.status, params.targeting, params.optimizationGoal, params.billingEvent, params.bidAmount, params.dailyBudget, params.lifetimeBudget, params.startTime, params.endTime);
+        // Adjust the response text to potentially include more details from result.adSetData
+        let responseText = result.success
+            ? `Reklamní sada "${params.name}" byla úspěšně vytvořena (ID: ${result.adSetId}).\n\n`
+            : `Chyba při vytváření reklamní sady: ${result.message}`;
+        if (result.success && result.adSetData) {
+            responseText += `Detaily:\n` +
+                `  - Status: ${result.adSetData.status}\n` +
+                `  - Optimalizace: ${result.adSetData.optimizationGoal}\n` +
+                `  - Účtování: ${result.adSetData.billingEvent}\n` +
+                (result.adSetData.dailyBudget ? `  - Denní rozpočet: ${result.adSetData.dailyBudget}\n` : '') +
+                (result.adSetData.lifetimeBudget ? `  - Celoživotní rozpočet: ${result.adSetData.lifetimeBudget}\n` : '') +
+                (result.adSetData.startTime ? `  - Začátek: ${new Date(result.adSetData.startTime).toLocaleString()}\n` : '') +
+                (result.adSetData.endTime ? `  - Konec: ${new Date(result.adSetData.endTime).toLocaleString()}\n` : '');
+        }
+        return {
+            content: [{ type: 'text', text: responseText }]
+        };
+    });
+    // TODO: Add tools for getAdSets, getAdSetDetails, updateAdSet, deleteAdSet
     // --- Registrace nástrojů pro AI asistenci ---
     server.tool('generate_campaign_prompt', {
-        templateName: zod_1.z.string().describe('Název šablony promptu (např. new_product_launch, lead_generation). Dostupné šablony: ' + Object.keys(campaign_templates_js_1.prompts).join(', ')),
-        variables: zod_1.z.record(zod_1.z.string()).describe('Objekt s proměnnými pro vyplnění šablony (např. {"productName": "XYZ", "targetAudience": "...", "budget": "1000"})')
+        templateName: zod_1.z.string().describe('Název šablony promptu. Dostupné šablony: ' + Object.keys(campaign_templates_js_1.prompts).join(', ')),
+        // Updated description for variables to match expected keys in templates
+        variables: zod_1.z.record(zod_1.z.string()).describe('Objekt s proměnnými pro vyplnění šablony. Očekávané klíče závisí na šabloně, např. pro campaignCreation: {"product": "...", "target_audience": "...", "budget": "...", "goal": "..."}')
     }, async ({ templateName, variables }) => {
         try {
-            const prompt = (0, campaign_templates_js_1.fillPromptTemplate)(templateName, variables);
-            return { content: [{ type: 'text', text: `📝 Vygenerovaný prompt pro šablonu "${templateName}":\n\n${prompt}` }] };
+            // fillPromptTemplate returns the array of messages directly
+            const messages = (0, campaign_templates_js_1.fillPromptTemplate)(templateName, variables);
+            // Return the messages array as the content, assuming the client expects this format for prompts
+            // Or format it differently if the client expects something else.
+            // For now, let's return the raw messages array. MCP spec might need clarification here.
+            // A safer approach might be to format it into a single text block if the client strictly expects text.
+            // Let's try formatting as text first.
+            const formattedPrompt = messages.map(msg => `${msg.role}: ${msg.content.text}`).join('\n\n');
+            return { content: [{ type: 'text', text: `📝 Vygenerovaný prompt pro šablonu "${templateName}":\n\n${formattedPrompt}` }] };
         }
         catch (error) {
             console.error(`Chyba při generování promptu '${templateName}':`, error); // Use console.error

@@ -17,7 +17,8 @@ export const createCampaign = async (
   status: string,
   dailyBudget?: number,
   startTime?: string,
-  endTime?: string
+  endTime?: string,
+  special_ad_categories?: string[] // Added new optional parameter
 ) => {
   try {
     const adAccount = getAdAccount();
@@ -42,15 +43,33 @@ export const createCampaign = async (
       params.end_time = endTime;
     }
     
-    // Vytvoření kampaně
-    // Pass params directly, not in array
-    const result: Campaign = await adAccount.createCampaign([], params); 
+    // Add special_ad_categories if provided
+    if (special_ad_categories && special_ad_categories.length > 0) {
+      params.special_ad_categories = special_ad_categories;
+      params.special_ad_categories = special_ad_categories;
+    }
     
+    // Define fields to retrieve after creation (Read-After-Write)
+    const fieldsToRead = ['id', 'name', 'objective', 'status', 'created_time', 'daily_budget'];
+
+    // Vytvoření kampaně and request fields in response
+    const result: Campaign = await adAccount.createCampaign(fieldsToRead, params); 
+    
+    // The result object itself should now contain the requested fields
+    const campaignData = {
+        id: result.id, // ID should be directly accessible
+        name: result._data?.name,
+        objective: result._data?.objective,
+        status: result._data?.status,
+        createdTime: result._data?.created_time,
+        dailyBudget: result._data?.daily_budget ? result._data.daily_budget / 100 : null,
+    };
+
     return {
       success: true,
-      // Access id via _data
-      campaignId: result._data?.id, 
-      message: 'Kampaň byla úspěšně vytvořena'
+      campaignId: campaignData.id, // Keep campaignId for consistency
+      campaignData: campaignData, // Return the fetched data
+      message: 'Kampaň byla úspěšně vytvořena a data načtena.'
     };
   } catch (error) {
     console.error('Chyba při vytváření kampaně:', error);
@@ -66,8 +85,8 @@ export const getCampaigns = async (limit = 10, status?: string) => {
   try {
     const adAccount = getAdAccount();
     
-    // Nastavení filtrů pro získání kampaní
-    const fields = ['id', 'name', 'objective', 'status', 'created_time', 'start_time', 'stop_time', 'daily_budget', 'lifetime_budget'];
+    // Nastavení filtrů pro získání kampaní - optimalizovaná pole
+    const fields = ['id', 'name', 'objective', 'status', 'created_time', 'daily_budget']; 
     const params: any = {
       limit
     };
@@ -95,10 +114,9 @@ export const getCampaigns = async (limit = 10, status?: string) => {
         objective: campaign._data?.objective,
         status: campaign._data?.status,
         createdTime: campaign._data?.created_time,
-        startTime: campaign._data?.start_time,
-        stopTime: campaign._data?.stop_time,
+        // startTime and stopTime removed as they are not used in the response
         dailyBudget: campaign._data?.daily_budget ? campaign._data.daily_budget / 100 : null, 
-        lifetimeBudget: campaign._data?.lifetime_budget ? campaign._data.lifetime_budget / 100 : null
+        // lifetimeBudget removed as it's not used in the response
       }))
     };
   } catch (error) {

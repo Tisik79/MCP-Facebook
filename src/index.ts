@@ -1,12 +1,14 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'; 
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // McpError and ErrorCode removed from imports, will rely on standard Error or handle later if needed
 import { StdioServerTransport as StdioTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod'; // Import zod for schema definition
-import { config, initFacebookSdk, validateConfig, getAdAccount } from './config.js';
+import { initFacebookSdk, validateConfig } from './config.js';
 import * as campaignTools from './tools/campaign-tools.js';
 import * as audienceTools from './tools/audience-tools.js';
 import * as analyticsTools from './tools/analytics-tools.js';
 import * as adSetTools from './tools/adset-tools.js'; // Import new adset tools
+import * as postTools from './tools/post-tools.js'; // Import post tools
+
 import { prompts, fillPromptTemplate } from './prompts/campaign-templates.js';
 
 // Funkce pro inicializaci serveru
@@ -46,10 +48,10 @@ const initializeServer = async (): Promise<McpServer> => {
       startTime: z.string().optional().describe('Čas začátku kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
       endTime: z.string().optional().describe('Čas konce kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
       // Made special_ad_categories required and non-empty
-      special_ad_categories: z.array(z.string()).nonempty().describe('Speciální kategorie reklam (POVINNÉ, MUSÍ obsahovat alespoň jednu platnou hodnotu, např. ["HOUSING"], ["EMPLOYMENT"], ["CREDIT"], ["ISSUES_ELECTIONS_POLITICS"])') 
+      special_ad_categories: z.array(z.string()).nonempty().describe('Speciální kategorie reklam (POVINNÉ, MUSÍ obsahovat alespoň jednu platnou hodnotu, např. ["HOUSING"], ["EMPLOYMENT"], ["CREDIT"], ["ISSUES_ELECTIONS_POLITICS"])')
     },
     // Destructure arguments directly in the handler signature
-    async ({ name, objective, status, dailyBudget, startTime, endTime, special_ad_categories }) => { 
+    async ({ name, objective, status, dailyBudget, startTime, endTime, special_ad_categories }) => {
       const result = await campaignTools.createCampaign(
         name,
         objective,
@@ -60,10 +62,10 @@ const initializeServer = async (): Promise<McpServer> => {
         special_ad_categories // Pass the new parameter
       );
       // Adjust the response text to include details from result.campaignData
-      let campaignResponseText = result.success 
-          ? `Kampaň byla úspěšně vytvořena (ID: ${result.campaignId}).\n\n` 
+      let campaignResponseText = result.success
+          ? `Kampaň byla úspěšně vytvořena (ID: ${result.campaignId}).\n\n`
           : `Chyba při vytváření kampaně: ${result.message}`;
-      
+
       if (result.success && result.campaignData) {
           campaignResponseText += `Detaily:\n` +
                                   `  - Název: ${result.campaignData.name}\n` +
@@ -272,7 +274,7 @@ const initializeServer = async (): Promise<McpServer> => {
           customer_file_source: z.string().optional().describe('Zdroj dat pro CUSTOM subtype (POVINNÉ pro CUSTOM, např. USER_PROVIDED_ONLY)'), // Clarified requirement
           rule: z.object({}).passthrough().optional().describe('Pravidlo pro WEBSITE nebo ENGAGEMENT subtype (POVINNÉ pro WEBSITE/ENGAGEMENT, komplexní JSON objekt dle FB API - viz dokumentace)') // Clarified requirement and complexity
       },
-      async ({ name, subtype, description, customer_file_source, rule }) => { // Destructure arguments
+      async ({ name, subtype, description, customer_file_source }) => { // Destructure arguments
           if (subtype === 'CUSTOM' && (!description || !customer_file_source)) {
              // Throw standard Error or handle appropriately
              throw new Error('Parametry description a customer_file_source jsou povinné pro CUSTOM subtype.');
@@ -281,14 +283,14 @@ const initializeServer = async (): Promise<McpServer> => {
 
           const result = await audienceTools.createCustomAudience(
               name,
-              description || '', 
-              customer_file_source || '', 
+              description || '',
+              customer_file_source || '',
               subtype
               // Pass rule if the underlying function supports it
           );
           // Adjust the response text to include details from result.audienceData
-          let audienceResponseText = result.success 
-              ? `Vlastní publikum "${name}" (typ: ${subtype}) bylo úspěšně vytvořeno (ID: ${result.audienceId}).\n\n` 
+          let audienceResponseText = result.success
+              ? `Vlastní publikum "${name}" (typ: ${subtype}) bylo úspěšně vytvořeno (ID: ${result.audienceId}).\n\n`
               : `Chyba při vytváření publika: ${result.message}`;
 
           if (result.success && result.audienceData) {
@@ -328,7 +330,7 @@ const initializeServer = async (): Promise<McpServer> => {
           return { content: [{ type: 'text', text: responseText }] };
        }
    );
-  
+
   server.tool(
       'create_lookalike_audience', // Tool specifically for Lookalike audiences
       {
@@ -347,8 +349,8 @@ const initializeServer = async (): Promise<McpServer> => {
               ratio // Pass ratio, function has default
           );
           // Adjust the response text to include details from result.audienceData
-          let lookalikeResponseText = result.success 
-              ? `Lookalike publikum "${name}" bylo úspěšně vytvořeno (ID: ${result.audienceId}).\n\n` 
+          let lookalikeResponseText = result.success
+              ? `Lookalike publikum "${name}" bylo úspěšně vytvořeno (ID: ${result.audienceId}).\n\n`
               : `Chyba při vytváření lookalike publika: ${result.message}`;
 
           if (result.success && result.audienceData) {
@@ -403,10 +405,10 @@ const initializeServer = async (): Promise<McpServer> => {
               params.endTime
           );
           // Adjust the response text to potentially include more details from result.adSetData
-          let responseText = result.success 
-              ? `Reklamní sada "${params.name}" byla úspěšně vytvořena (ID: ${result.adSetId}).\n\n` 
+          let responseText = result.success
+              ? `Reklamní sada "${params.name}" byla úspěšně vytvořena (ID: ${result.adSetId}).\n\n`
               : `Chyba při vytváření reklamní sady: ${result.message}`;
-          
+
           if (result.success && result.adSetData) {
               responseText += `Detaily:\n` +
                               `  - Status: ${result.adSetData.status}\n` +
@@ -431,12 +433,12 @@ const initializeServer = async (): Promise<McpServer> => {
        {
            templateName: z.string().describe('Název šablony promptu. Dostupné šablony: ' + Object.keys(prompts).join(', ')),
            // Updated description for variables to match expected keys in templates
-           variables: z.record(z.string()).describe('Objekt s proměnnými pro vyplnění šablony. Očekávané klíče závisí na šabloně, např. pro campaignCreation: {"product": "...", "target_audience": "...", "budget": "...", "goal": "..."}') 
+           variables: z.record(z.string()).describe('Objekt s proměnnými pro vyplnění šablony. Očekávané klíče závisí na šabloně, např. pro campaignCreation: {"product": "...", "target_audience": "...", "budget": "...", "goal": "..."}')
        },
        async ({ templateName, variables }) => { // Destructure arguments
            try {
                // fillPromptTemplate returns the array of messages directly
-               const messages = fillPromptTemplate(templateName, variables); 
+               const messages = fillPromptTemplate(templateName, variables);
                // Return the messages array as the content, assuming the client expects this format for prompts
                // Or format it differently if the client expects something else.
                // For now, let's return the raw messages array. MCP spec might need clarification here.
@@ -451,6 +453,39 @@ const initializeServer = async (): Promise<McpServer> => {
        }
    );
 
+  // --- Registrace nástrojů pro správu příspěvků ---
+  server.tool(
+      'create_post',
+      {
+          content: z.string().describe('Obsah příspěvku'),
+          link: z.string().optional().describe('Volitelný odkaz, který bude součástí příspěvku'),
+          imagePath: z.string().optional().describe('Volitelná cesta k obrázku, který bude součástí příspěvku')
+      },
+      async ({ content, link, imagePath }) => { // Destructure arguments
+          // Assuming create_post returns a simple string ID or throws an error
+          try {
+              const postId = await postTools.create_post(content, link, imagePath);
+              let responseText = `✅ Příspěvek byl úspěšně vytvořen (ID: ${postId}).`;
+
+              if (link) {
+                  responseText += `\n- Odkaz: ${link}`;
+              }
+
+              if (imagePath) {
+                  responseText += `\n- Obrázek: ${imagePath}`;
+              }
+
+              return {
+                  content: [{ type: 'text', text: responseText }]
+              };
+          } catch (error: any) {
+               console.error(`Chyba při vytváření příspěvku:`, error);
+               return { content: [{ type: 'text', text: `❌ Chyba při vytváření příspěvku: ${error.message}` }], isError: true };
+          }
+      }
+  );
+
+
   return server; // Return the created server instance
 };
 
@@ -459,7 +494,7 @@ const startServer = async () => {
   try {
     // console.log('🚀 Inicializace MCP serveru...'); // Removed console log
     const server = await initializeServer(); // Directly get the server instance
-    
+
     // Create transport here
     const transport = new StdioTransport();
 
@@ -474,12 +509,12 @@ const startServer = async () => {
     process.on('SIGTERM', shutdown); // Terminate signal
 
     // Connect the server to the transport
-    await server.connect(transport); 
+    await server.connect(transport);
     // console.log('✅ MCP server úspěšně spuštěn a naslouchá na stdio.'); // Removed console log - Client should receive MCP messages only
 
   } catch (error) {
     // Log critical errors to stderr so they don't interfere with stdout MCP messages
-    console.error(`❌ Kritická chyba při startu serveru: ${error instanceof Error ? error.stack : error}`); 
+    console.error(`❌ Kritická chyba při startu serveru: ${error instanceof Error ? error.stack : error}`);
     process.exit(1);
   }
 };

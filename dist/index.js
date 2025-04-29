@@ -42,6 +42,7 @@ const campaignTools = __importStar(require("./tools/campaign-tools.js"));
 const audienceTools = __importStar(require("./tools/audience-tools.js"));
 const analyticsTools = __importStar(require("./tools/analytics-tools.js"));
 const adSetTools = __importStar(require("./tools/adset-tools.js")); // Import new adset tools
+const postTools = __importStar(require("./tools/post-tools.js")); // Import post tools
 const campaign_templates_js_1 = require("./prompts/campaign-templates.js");
 // Funkce pro inicializaci serveru
 const initializeServer = async () => {
@@ -255,7 +256,7 @@ const initializeServer = async () => {
         description: zod_1.z.string().optional().describe('Volitelný popis publika'),
         customer_file_source: zod_1.z.string().optional().describe('Zdroj dat pro CUSTOM subtype (POVINNÉ pro CUSTOM, např. USER_PROVIDED_ONLY)'), // Clarified requirement
         rule: zod_1.z.object({}).passthrough().optional().describe('Pravidlo pro WEBSITE nebo ENGAGEMENT subtype (POVINNÉ pro WEBSITE/ENGAGEMENT, komplexní JSON objekt dle FB API - viz dokumentace)') // Clarified requirement and complexity
-    }, async ({ name, subtype, description, customer_file_source, rule }) => {
+    }, async ({ name, subtype, description, customer_file_source }) => {
         if (subtype === 'CUSTOM' && (!description || !customer_file_source)) {
             // Throw standard Error or handle appropriately
             throw new Error('Parametry description a customer_file_source jsou povinné pro CUSTOM subtype.');
@@ -387,6 +388,31 @@ const initializeServer = async () => {
         catch (error) {
             console.error(`Chyba při generování promptu '${templateName}':`, error); // Use console.error
             return { content: [{ type: 'text', text: `❌ Chyba při generování promptu: ${error.message}` }], isError: true };
+        }
+    });
+    // --- Registrace nástrojů pro správu příspěvků ---
+    server.tool('create_post', {
+        content: zod_1.z.string().describe('Obsah příspěvku'),
+        link: zod_1.z.string().optional().describe('Volitelný odkaz, který bude součástí příspěvku'),
+        imagePath: zod_1.z.string().optional().describe('Volitelná cesta k obrázku, který bude součástí příspěvku')
+    }, async ({ content, link, imagePath }) => {
+        // Assuming create_post returns a simple string ID or throws an error
+        try {
+            const postId = await postTools.create_post(content, link, imagePath);
+            let responseText = `✅ Příspěvek byl úspěšně vytvořen (ID: ${postId}).`;
+            if (link) {
+                responseText += `\n- Odkaz: ${link}`;
+            }
+            if (imagePath) {
+                responseText += `\n- Obrázek: ${imagePath}`;
+            }
+            return {
+                content: [{ type: 'text', text: responseText }]
+            };
+        }
+        catch (error) {
+            console.error(`Chyba při vytváření příspěvku:`, error);
+            return { content: [{ type: 'text', text: `❌ Chyba při vytváření příspěvku: ${error.message}` }], isError: true };
         }
     });
     return server; // Return the created server instance

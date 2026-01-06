@@ -111,11 +111,17 @@ Pro použití tohoto MCP serveru s Claude Desktop přidejte následující konfi
 - `update_campaign` - Aktualizace kampaně
 - `delete_campaign` - Odstranění kampaně
 
+### Nástroje pro správu reklamních sad (Ad Sets)
+- `create_ad_set` - Vytvoření nové reklamní sady
+- `get_adsets` - Získání seznamu reklamních sad s možností filtrování podle kampaně, stavu a limitu
+
+### Nástroje pro správu reklam (Ads)
+- `get_ads` - Získání seznamu reklam s možností filtrování podle reklamní sady, kampaně, stavu a limitu
+
 ### Nástroje pro analýzu a vyhodnocování
 - `get_campaign_insights` - Získání analytických dat o kampani
-- `get_account_insights` - Získání souhrnných dat o účtu
-- `compare_campaigns` - Porovnání více kampaní
-- `get_campaign_demographics` - Získání demografických údajů
+- `get_adset_insights` - Získání analytických dat o reklamní sadě
+- `get_ad_insights` - Získání analytických dat o jednotlivé reklamě
 
 ### Nástroje pro správu publik
 - `create_custom_audience` - Vytvoření vlastního publika

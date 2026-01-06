@@ -68,18 +68,21 @@ Once configured, the "facebook-ads-mcp-local" server (or the name you chose) sho
     *   `get_campaign_details`: Gets details for a specific campaign ID.
     *   `update_campaign`: Updates an existing campaign (name, status, budget, end time). Requires campaign ID.
     *   `delete_campaign`: Deletes a campaign by ID.
+*   **Ad Set Management**:
+    *   `create_ad_set`: Creates a new ad set under a campaign. Requires `campaignId`, `name`, `status`, `targeting` (complex JSON object), `optimizationGoal`, `billingEvent`, and a budget (`dailyBudget` or `lifetimeBudget` in cents). Optional: `bidAmount` (cents), `startTime`, `endTime`.
+    *   `get_adsets`: Lists ad sets. Optional filters: `campaignId`, `limit`, `status`.
+*   **Ad Management**:
+    *   `get_ads`: Lists ads. Optional filters: `adSetId`, `campaignId`, `limit`, `status`.
 *   **Audience Management**:
     *   `create_custom_audience`: Creates a custom audience (type CUSTOM, WEBSITE, ENGAGEMENT). Requires name, subtype. `description` and `customer_file_source` are required for CUSTOM. `rule` (complex JSON object) is required for WEBSITE/ENGAGEMENT.
     *   `get_audiences`: Lists available custom audiences. Optional filter: limit.
     *   `create_lookalike_audience`: Creates a lookalike audience (type LOOKALIKE). Requires `sourceAudienceId`, `name`, `country`. Optional: `description`, `ratio`.
-*   **Ad Set Management**:
-    *   `create_ad_set`: Creates a new ad set under a campaign. Requires `campaignId`, `name`, `status`, `targeting` (complex JSON object), `optimizationGoal`, `billingEvent`, and a budget (`dailyBudget` or `lifetimeBudget` in cents). Optional: `bidAmount` (cents), `startTime`, `endTime`.
 *   **Post Management**:
     *   `create_post`: Creates an organic post on a Facebook Page. Requires `content` (text of the post). Optional: `link` (URL to include in the post), `imagePath` (path to an image file to include in the post).
 *   **Analytics**:
     *   `get_campaign_insights`: Retrieves performance insights for a campaign. Requires campaign ID, start date (`since`), end date (`until`). Optional: specific metrics.
-*   **AI Assistance**:
-    *   `generate_campaign_prompt`: Generates a detailed prompt based on a template name and variables, useful for guiding AI in campaign creation tasks.
+    *   `get_adset_insights`: Retrieves performance insights for an ad set. Requires ad set ID, start date (`since`), end date (`until`). Optional: specific metrics.
+    *   `get_ad_insights`: Retrieves performance insights for an individual ad. Requires ad ID, start date (`since`), end date (`until`). Optional: specific metrics.
 
 ### Example Usage (Prompts for Claude)
 
@@ -90,7 +93,8 @@ Once configured, the "facebook-ads-mcp-local" server (or the name you chose) sho
 *   **Create a Lookalike Audience**: "Using `facebook-ads-mcp-local`, create a lookalike audience named 'Lookalike US 1%' based on source audience '111222333'. Target country 'US' and use the default 1% ratio."
 *   **Create an Organic Post**: "Using `facebook-ads-mcp-local`, create a new post on my Facebook Page with the content 'Exciting news! We're launching a new product next week. Stay tuned for more details!' and include the link 'https://example.com/new-product'."
 *   **Create a Post with Image**: "Using `facebook-ads-mcp-local`, create a new post on my Facebook Page with the content 'Check out our new office!' and include the image at '/path/to/office-image.jpg'."
-*   **Generate a Prompt**: "Use `facebook-ads-mcp-local` and the `generate_campaign_prompt` tool with template 'campaignCreation' and variables `{\"product\": \"My SaaS\", \"target_audience\": \"Small business owners\", \"budget\": \"$500\", \"goal\": \"Lead Generation\"}`." (Note the required variable names for this template).
+*   **Get Ad Set Insights**: "Using `facebook-ads-mcp-local`, get insights for ad set ID '123456789' from 2024-01-01 to 2024-01-31."
+*   **List All Ads in a Campaign**: "Using `facebook-ads-mcp-local`, list all ads in campaign ID '987654321'."
 
 Remember to replace example IDs, names, and values with your actual data. Refer to the tool descriptions provided by the server in Claude Desktop for exact parameter names and requirements. **Ensure your Access Token in the `.env` file has the necessary permissions for the tools you intend to use**:
 - `ads_management` for creating/modifying campaigns, ad sets, and audiences

@@ -73,22 +73,25 @@ This project provides a Model Context Protocol (MCP) server designed to interact
 *   `update_campaign`: Updates an existing campaign.
 *   `delete_campaign`: Deletes a campaign.
 
+### Ad Set Management
+*   `create_ad_set`: Creates a new ad set.
+*   `get_adsets`: Lists ad sets with optional filtering by campaign, status, and limit.
+
+### Ad Management
+*   `get_ads`: Lists ads with optional filtering by ad set, campaign, status, and limit.
+
 ### Audience Management
 *   `create_custom_audience`: Creates a custom, website, or engagement audience.
 *   `get_audiences`: Lists available custom audiences.
 *   `create_lookalike_audience`: Creates a lookalike audience.
-
-### Ad Set Management
-*   `create_ad_set`: Creates a new ad set.
 
 ### Post Management
 *   `create_post`: Creates an organic post on a Facebook Page. Supports text posts, posts with links, and posts with images.
 
 ### Analytics
 *   `get_campaign_insights`: Retrieves performance insights for a campaign.
-
-### AI Assistance
-*   `generate_campaign_prompt`: Generates a prompt for campaign creation using a template.
+*   `get_adset_insights`: Retrieves performance insights for an ad set.
+*   `get_ad_insights`: Retrieves performance insights for an individual ad.
 
 Refer to the server's tool descriptions in your MCP client for detailed parameter information.
 

@@ -249,6 +249,131 @@ const initializeServer = async () => {
         }
         return { content: [{ type: 'text', text: responseText }] };
     });
+    // --- Registrace nástrojů pro insights Ad Setů ---
+    server.tool('get_adset_insights', {
+        adSetId: zod_1.z.string().describe('ID reklamní sady (Ad Set)'),
+        since: zod_1.z.string().describe('Datum začátku ve formátu YYYY-MM-DD'),
+        until: zod_1.z.string().describe('Datum konce ve formátu YYYY-MM-DD'),
+        metrics: zod_1.z.string().optional().describe('Volitelný seznam metrik oddělených čárkou (např. impressions,clicks,spend). Výchozí: impressions, clicks, spend, cpc, ctr, reach, frequency, actions')
+    }, async ({ adSetId, since, until, metrics }) => {
+        const timeRange = { since, until };
+        let metricsArray = ['impressions', 'clicks', 'spend', 'cpc', 'ctr', 'reach', 'frequency', 'actions'];
+        if (metrics) {
+            metricsArray = metrics.split(',').map(m => m.trim()).filter(m => m.length > 0);
+        }
+        const result = await analyticsTools.getAdSetInsights(adSetId, timeRange, metricsArray);
+        if (!result.success) {
+            return { content: [{ type: 'text', text: `❌ Chyba při získávání analytických dat Ad Set: ${result.message}` }], isError: true };
+        }
+        if (!result.insights || result.insights.length === 0) {
+            return { content: [{ type: 'text', text: `ℹ️ Nebyla nalezena žádná analytická data pro Ad Set ${adSetId} v období ${since} - ${until}. ${result.message || ''}` }] };
+        }
+        const summaryInsight = result.insights[0];
+        let responseText = `📈 Analytická data Ad Set (ID: ${adSetId}) za období ${summaryInsight.date_start || since} - ${summaryInsight.date_stop || until}:\n\n`;
+        responseText += `**Souhrn:**\n`;
+        metricsArray.forEach(metric => {
+            if (summaryInsight[metric] !== undefined) {
+                if (metric === 'actions' && Array.isArray(summaryInsight[metric])) {
+                    responseText += `- ${metric}:\n`;
+                    summaryInsight[metric].forEach((action) => {
+                        responseText += `    - ${action.action_type}: ${action.value}\n`;
+                    });
+                }
+                else {
+                    responseText += `- ${metric}: ${summaryInsight[metric]}\n`;
+                }
+            }
+        });
+        return { content: [{ type: 'text', text: responseText }] };
+    });
+    // --- Registrace nástrojů pro insights jednotlivých reklam ---
+    server.tool('get_ad_insights', {
+        adId: zod_1.z.string().describe('ID reklamy (Ad)'),
+        since: zod_1.z.string().describe('Datum začátku ve formátu YYYY-MM-DD'),
+        until: zod_1.z.string().describe('Datum konce ve formátu YYYY-MM-DD'),
+        metrics: zod_1.z.string().optional().describe('Volitelný seznam metrik oddělených čárkou (např. impressions,clicks,spend). Výchozí: impressions, clicks, spend, cpc, ctr, reach, frequency, actions')
+    }, async ({ adId, since, until, metrics }) => {
+        const timeRange = { since, until };
+        let metricsArray = ['impressions', 'clicks', 'spend', 'cpc', 'ctr', 'reach', 'frequency', 'actions'];
+        if (metrics) {
+            metricsArray = metrics.split(',').map(m => m.trim()).filter(m => m.length > 0);
+        }
+        const result = await analyticsTools.getAdInsights(adId, timeRange, metricsArray);
+        if (!result.success) {
+            return { content: [{ type: 'text', text: `❌ Chyba při získávání analytických dat reklamy: ${result.message}` }], isError: true };
+        }
+        if (!result.insights || result.insights.length === 0) {
+            return { content: [{ type: 'text', text: `ℹ️ Nebyla nalezena žádná analytická data pro reklamu ${adId} v období ${since} - ${until}. ${result.message || ''}` }] };
+        }
+        const summaryInsight = result.insights[0];
+        let responseText = `📈 Analytická data reklamy (ID: ${adId}) za období ${summaryInsight.date_start || since} - ${summaryInsight.date_stop || until}:\n\n`;
+        responseText += `**Souhrn:**\n`;
+        metricsArray.forEach(metric => {
+            if (summaryInsight[metric] !== undefined) {
+                if (metric === 'actions' && Array.isArray(summaryInsight[metric])) {
+                    responseText += `- ${metric}:\n`;
+                    summaryInsight[metric].forEach((action) => {
+                        responseText += `    - ${action.action_type}: ${action.value}\n`;
+                    });
+                }
+                else {
+                    responseText += `- ${metric}: ${summaryInsight[metric]}\n`;
+                }
+            }
+        });
+        return { content: [{ type: 'text', text: responseText }] };
+    });
+    // --- Registrace nástrojů pro získání seznamu Ad Setů ---
+    server.tool('get_adsets', {
+        campaignId: zod_1.z.string().optional().describe('Volitelné ID kampaně pro filtrování'),
+        limit: zod_1.z.string().optional().describe('Maximální počet Ad Setů k zobrazení (výchozí: 25)'),
+        status: zod_1.z.string().optional().describe('Filtrování podle statusu (ACTIVE, PAUSED, ARCHIVED)')
+    }, async ({ campaignId, limit, status }) => {
+        const result = await analyticsTools.getAdSets(campaignId, limit ? parseInt(limit) : 25, status);
+        if (!result.success) {
+            return { content: [{ type: 'text', text: `❌ Chyba při získávání Ad Setů: ${result.message}` }], isError: true };
+        }
+        let responseText = `📋 Seznam reklamních sad (celkem ${result.adSets?.length || 0}):\n\n`;
+        if (!result.adSets || result.adSets.length === 0) {
+            responseText += 'Nebyly nalezeny žádné reklamní sady odpovídající zadaným kritériím.';
+        }
+        else {
+            result.adSets.forEach((adSet, index) => {
+                responseText += `${index + 1}. **${adSet.name}** (ID: ${adSet.id})\n`;
+                responseText += `   - Status: ${adSet.status || 'N/A'} (${adSet.effectiveStatus || 'N/A'})\n`;
+                responseText += `   - Kampaň ID: ${adSet.campaignId || 'N/A'}\n`;
+                responseText += `   - Optimalizace: ${adSet.optimizationGoal || 'N/A'}\n`;
+                responseText += `   - Rozpočet: ${adSet.dailyBudget ? `${adSet.dailyBudget}/den` : adSet.lifetimeBudget ? `${adSet.lifetimeBudget} celkem` : 'Není nastaven'}\n\n`;
+            });
+        }
+        return { content: [{ type: 'text', text: responseText }] };
+    });
+    // --- Registrace nástrojů pro získání seznamu reklam ---
+    server.tool('get_ads', {
+        adSetId: zod_1.z.string().optional().describe('Volitelné ID Ad Set pro filtrování'),
+        campaignId: zod_1.z.string().optional().describe('Volitelné ID kampaně pro filtrování'),
+        limit: zod_1.z.string().optional().describe('Maximální počet reklam k zobrazení (výchozí: 25)'),
+        status: zod_1.z.string().optional().describe('Filtrování podle statusu (ACTIVE, PAUSED, ARCHIVED)')
+    }, async ({ adSetId, campaignId, limit, status }) => {
+        const result = await analyticsTools.getAds(adSetId, campaignId, limit ? parseInt(limit) : 25, status);
+        if (!result.success) {
+            return { content: [{ type: 'text', text: `❌ Chyba při získávání reklam: ${result.message}` }], isError: true };
+        }
+        let responseText = `📋 Seznam reklam (celkem ${result.ads?.length || 0}):\n\n`;
+        if (!result.ads || result.ads.length === 0) {
+            responseText += 'Nebyly nalezeny žádné reklamy odpovídající zadaným kritériím.';
+        }
+        else {
+            result.ads.forEach((ad, index) => {
+                responseText += `${index + 1}. **${ad.name}** (ID: ${ad.id})\n`;
+                responseText += `   - Status: ${ad.status || 'N/A'} (${ad.effectiveStatus || 'N/A'})\n`;
+                responseText += `   - Ad Set ID: ${ad.adSetId || 'N/A'}\n`;
+                responseText += `   - Kampaň ID: ${ad.campaignId || 'N/A'}\n`;
+                responseText += `   - Vytvořeno: ${ad.createdTime ? new Date(ad.createdTime).toLocaleDateString() : 'N/A'}\n\n`;
+            });
+        }
+        return { content: [{ type: 'text', text: responseText }] };
+    });
     // --- Registrace nástrojů pro správu publik ---
     server.tool('create_custom_audience', {
         name: zod_1.z.string().describe('Název publika'),

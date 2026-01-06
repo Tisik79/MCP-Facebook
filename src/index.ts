@@ -9,7 +9,6 @@ import * as analyticsTools from './tools/analytics-tools.js';
 import * as adSetTools from './tools/adset-tools.js'; // Import new adset tools
 import * as postTools from './tools/post-tools.js'; // Import post tools
 
-import { prompts, fillPromptTemplate } from './prompts/campaign-templates.js';
 
 // Funkce pro inicializaci serveru
 const initializeServer = async (): Promise<McpServer> => {
@@ -583,34 +582,6 @@ const initializeServer = async (): Promise<McpServer> => {
           };
       }
   );
-  // TODO: Add tools for getAdSets, getAdSetDetails, updateAdSet, deleteAdSet
-
-  // --- Registrace nástrojů pro AI asistenci ---
-   server.tool(
-       'generate_campaign_prompt',
-       {
-           templateName: z.string().describe('Název šablony promptu. Dostupné šablony: ' + Object.keys(prompts).join(', ')),
-           // Updated description for variables to match expected keys in templates
-           variables: z.record(z.string()).describe('Objekt s proměnnými pro vyplnění šablony. Očekávané klíče závisí na šabloně, např. pro campaignCreation: {"product": "...", "target_audience": "...", "budget": "...", "goal": "..."}')
-       },
-       async ({ templateName, variables }) => { // Destructure arguments
-           try {
-               // fillPromptTemplate returns the array of messages directly
-               const messages = fillPromptTemplate(templateName, variables);
-               // Return the messages array as the content, assuming the client expects this format for prompts
-               // Or format it differently if the client expects something else.
-               // For now, let's return the raw messages array. MCP spec might need clarification here.
-               // A safer approach might be to format it into a single text block if the client strictly expects text.
-               // Let's try formatting as text first.
-               const formattedPrompt = messages.map(msg => `${msg.role}: ${msg.content.text}`).join('\n\n');
-               return { content: [{ type: 'text', text: `📝 Vygenerovaný prompt pro šablonu "${templateName}":\n\n${formattedPrompt}` }] };
-           } catch (error: any) {
-               console.error(`Chyba při generování promptu '${templateName}':`, error); // Use console.error
-               return { content: [{ type: 'text', text: `❌ Chyba při generování promptu: ${error.message}` }], isError: true };
-           }
-       }
-   );
-
   // --- Registrace nástrojů pro správu příspěvků ---
   server.tool(
       'create_post',

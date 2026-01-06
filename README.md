@@ -7,6 +7,7 @@ This project provides a Model Context Protocol (MCP) server designed to interact
 *   **Campaign Management**: Create, read, update, delete campaigns.
 *   **Audience Management**: Create custom and lookalike audiences, list audiences.
 *   **Ad Set Management**: Create ad sets (basic implementation).
+*   **Post Management**: Create organic posts on Facebook Pages.
 *   **Analytics**: Get campaign insights.
 *   **AI Assistance**: Generate prompts for campaign creation based on templates.
 
@@ -30,14 +31,21 @@ This project provides a Model Context Protocol (MCP) server designed to interact
     npm install
     ```
 3.  **Configure Environment Variables:**
-    Create a `.env` file in the project root and add your Facebook App credentials:
+    Copy the `.env.example` file to `.env` in the project root and add your Facebook App credentials:
+    ```bash
+    cp .env.example .env
+    ```
+    Then edit the `.env` file with your actual values:
     ```dotenv
     FACEBOOK_APP_ID=YOUR_APP_ID
     FACEBOOK_APP_SECRET=YOUR_APP_SECRET
-    FACEBOOK_ACCESS_TOKEN=YOUR_ACCESS_TOKEN 
-    FACEBOOK_ACCOUNT_ID=act_YOUR_ACCOUNT_ID 
+    FACEBOOK_ACCESS_TOKEN=YOUR_ACCESS_TOKEN
+    FACEBOOK_ACCOUNT_ID=act_YOUR_ACCOUNT_ID
+    PORT=3000
     ```
-    Replace placeholders with your actual values. **Ensure the Access Token has the `ads_management` permission.**
+    Replace placeholders with your actual values. **Ensure the Access Token has the `ads_management` and `pages_manage_posts` permissions.**
+
+    > **Security Note**: Never commit your `.env` file to version control. The `.env` file is already included in `.gitignore`.
 
 ## Usage
 
@@ -58,16 +66,28 @@ This project provides a Model Context Protocol (MCP) server designed to interact
 
 ## Available Tools (via MCP)
 
+### Campaign Management
 *   `create_campaign`: Creates a new ad campaign.
 *   `get_campaigns`: Lists existing campaigns.
 *   `get_campaign_details`: Gets details for a specific campaign.
 *   `update_campaign`: Updates an existing campaign.
 *   `delete_campaign`: Deletes a campaign.
+
+### Audience Management
 *   `create_custom_audience`: Creates a custom, website, or engagement audience.
 *   `get_audiences`: Lists available custom audiences.
 *   `create_lookalike_audience`: Creates a lookalike audience.
+
+### Ad Set Management
 *   `create_ad_set`: Creates a new ad set.
+
+### Post Management
+*   `create_post`: Creates an organic post on a Facebook Page. Supports text posts, posts with links, and posts with images.
+
+### Analytics
 *   `get_campaign_insights`: Retrieves performance insights for a campaign.
+
+### AI Assistance
 *   `generate_campaign_prompt`: Generates a prompt for campaign creation using a template.
 
 Refer to the server's tool descriptions in your MCP client for detailed parameter information.

@@ -25,6 +25,10 @@ Tento MCP server poskytuje rozhraní pro komunikaci s Facebook Marketing API pom
   - Vytváření lookalike publik
   - Správa seznamů uživatelů
 
+- **Správa příspěvků**
+  - Vytváření organických příspěvků na Facebook stránkách
+  - Podpora textových příspěvků, příspěvků s odkazy a příspěvků s obrázky
+
 - **AI asistence**
   - Šablony promptů pro Claude AI
   - Analýza výkonu kampaní
@@ -35,7 +39,7 @@ Tento MCP server poskytuje rozhraní pro komunikaci s Facebook Marketing API pom
 - Node.js (verze 18 nebo vyšší)
 - Facebook Business Manager účet
 - Facebook App s přístupem k Marketing API
-- Přístupový token s oprávněními pro Facebook Ads API
+- Přístupový token s oprávněními pro Facebook Ads API (`ads_management`, `ads_read`) a Facebook Pages API (`pages_manage_posts`)
 - Claude AI nebo jiný LLM s podporou MCP
 
 ## Instalace
@@ -51,7 +55,12 @@ cd MCP-Facebook
 npm install
 ```
 
-3. Vytvořte soubor `.env` s následujícím obsahem:
+3. Zkopírujte soubor `.env.example` na `.env` a upravte ho:
+```bash
+cp .env.example .env
+```
+
+Poté upravte soubor `.env` a vložte do něj své přístupové údaje:
 ```
 FACEBOOK_APP_ID=your_app_id
 FACEBOOK_APP_SECRET=your_app_secret
@@ -59,6 +68,8 @@ FACEBOOK_ACCESS_TOKEN=your_access_token
 FACEBOOK_ACCOUNT_ID=your_ad_account_id
 PORT=3000
 ```
+
+> **Bezpečnostní poznámka**: Nikdy neukládejte soubor `.env` do verzovacího systému. Soubor `.env` je již zahrnut v `.gitignore`.
 
 4. Zkompilujte TypeScript:
 ```bash
@@ -108,9 +119,11 @@ Pro použití tohoto MCP serveru s Claude Desktop přidejte následující konfi
 
 ### Nástroje pro správu publik
 - `create_custom_audience` - Vytvoření vlastního publika
-- `get_custom_audiences` - Získání seznamu publik
+- `get_audiences` - Získání seznamu publik
 - `create_lookalike_audience` - Vytvoření lookalike publika
-- `add_users_to_custom_audience` - Přidání uživatelů do publika
+
+### Nástroje pro správu příspěvků
+- `create_post` - Vytvoření organického příspěvku na Facebook stránce (text, odkaz, obrázek)
 
 ## Bezpečnost
 
@@ -121,6 +134,8 @@ Pro produkční nasazení doporučujeme:
 - Používat proměnné prostředí pro citlivé údaje
 - Pravidelně obnovovat přístupové tokeny
 - Implementovat další vrstvy zabezpečení (firewall, VPN)
+- **Nikdy neukládat soubor `.env` do verzovacího systému**
+- Používat `.env.example` s placeholdery místo skutečných hodnot
 
 ## Licence
 

@@ -1,9 +1,10 @@
-/**
+/*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * All rights reserved.
  *
  * This source code is licensed under the license found in the
  * LICENSE file in the root directory of this source tree.
+ *
  * @flow
  */
 
@@ -32,7 +33,6 @@ let fields, params;
 fields = [
 ];
 params = {
-  'hotel_catalog_settings' : {'pull_config_id':'<pullConfigID>'},
 };
 const sample_code = (new ProductCatalog(id)).update(
   fields,

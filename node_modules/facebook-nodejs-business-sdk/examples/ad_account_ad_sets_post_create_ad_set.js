@@ -1,9 +1,10 @@
-/**
+/*
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * All rights reserved.
  *
  * This source code is licensed under the license found in the
  * LICENSE file in the root directory of this source tree.
+ *
  * @flow
  */
 
@@ -35,8 +36,8 @@ fields = [
 params = {
   'name' : 'My First AdSet',
   'lifetime_budget' : '20000',
-  'start_time' : '2023-04-24T09:24:18-0700',
-  'end_time' : '2023-05-01T09:24:18-0700',
+  'start_time' : '2024-07-27T00:46:29-0700',
+  'end_time' : '2024-08-03T00:46:29-0700',
   'campaign_id' : '<adCampaignLinkClicksID>',
   'bid_amount' : '500',
   'billing_event' : 'IMPRESSIONS',

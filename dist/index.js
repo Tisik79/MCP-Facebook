@@ -38,6 +38,8 @@ const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const zod_1 = require("zod"); // Import zod for schema definition
 const config_js_1 = require("./config.js");
+const auth_manager_js_1 = require("./auth-manager.js");
+const auth_entry_js_1 = require("./auth-entry.js");
 const campaignTools = __importStar(require("./tools/campaign-tools.js"));
 const audienceTools = __importStar(require("./tools/audience-tools.js"));
 const analyticsTools = __importStar(require("./tools/analytics-tools.js"));
@@ -516,13 +518,26 @@ const initializeServer = async () => {
             return { content: [{ type: 'text', text: `❌ Chyba při vytváření příspěvku: ${error.message}` }], isError: true };
         }
     });
+    server.tool('list_connected_accounts', {}, async () => {
+        const pages = (0, auth_manager_js_1.listConnectedPages)();
+        if (pages.length === 0) {
+            return { content: [{ type: 'text', text: 'Zadne propojene ucty.\nPrihlaste se pres: http://localhost:3456/auth/login' }] };
+        }
+        let text = 'Propojene Facebook ucty (' + pages.length + '):\n\n';
+        pages.forEach((p, i) => {
+            text += (i + 1) + '. ' + p.name + ' (ID: ' + p.id + ')' + (p.category ? ' - ' + p.category : '') + '\n';
+        });
+        text += '\nPro pridani dalsich uctu: http://localhost:3456/auth/login\nStatus: http://localhost:3456/status';
+        return { content: [{ type: 'text', text }] };
+    });
     return server; // Return the created server instance
 };
 // Hlavní funkce pro spuštění serveru
 const startServer = async () => {
     try {
-        // console.log('🚀 Inicializace MCP serveru...'); // Removed console log
-        const server = await initializeServer(); // Directly get the server instance
+        // Zajisti ze uzivatel je prihlasen
+        await (0, auth_entry_js_1.ensureAuth)();
+        const server = await initializeServer();
         // Create transport here
         const transport = new stdio_js_1.StdioServerTransport();
         // Handle graceful shutdown

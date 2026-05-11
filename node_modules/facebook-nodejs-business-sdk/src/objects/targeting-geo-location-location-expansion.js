@@ -19,6 +19,7 @@ export default class TargetingGeoLocationLocationExpansion extends AbstractCrudO
   static get Fields (): Object {
     return Object.freeze({
       allowed: 'allowed',
+      intent: 'intent',
     });
   }
 

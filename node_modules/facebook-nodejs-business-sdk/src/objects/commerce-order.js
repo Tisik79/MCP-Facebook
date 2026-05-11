@@ -22,6 +22,7 @@ export default class CommerceOrder extends AbstractCrudObject {
     return Object.freeze({
       buyer_details: 'buyer_details',
       channel: 'channel',
+      contains_bopis_items: 'contains_bopis_items',
       created: 'created',
       estimated_payment_details: 'estimated_payment_details',
       id: 'id',
@@ -30,6 +31,7 @@ export default class CommerceOrder extends AbstractCrudObject {
       last_updated: 'last_updated',
       merchant_order_id: 'merchant_order_id',
       order_status: 'order_status',
+      pre_order_details: 'pre_order_details',
       selected_shipping_option: 'selected_shipping_option',
       ship_by_date: 'ship_by_date',
       shipping_address: 'shipping_address',
@@ -100,9 +102,9 @@ export default class CommerceOrder extends AbstractCrudObject {
     );
   }
 
-  createFulfillOrder (fields: Array<string>, params: Object = {}, pathOverride?: ?string = null): Promise<CommerceOrder> {
+  createItemUpdate (fields: Array<string>, params: Object = {}, pathOverride?: ?string = null): Promise<CommerceOrder> {
     return this.createEdge(
-      '/fulfill_order',
+      '/item_updates',
       fields,
       params,
       CommerceOrder,
@@ -140,7 +142,7 @@ export default class CommerceOrder extends AbstractCrudObject {
     );
   }
 
-  getPromotions (fields: Array<string>, params: Object = {}, fetchFirstPage: boolean = true): Cursor | Promise<*> {
+  getPromoTIOns (fields: Array<string>, params: Object = {}, fetchFirstPage: boolean = true): Cursor | Promise<*> {
     return this.getEdge(
       AbstractObject,
       fields,

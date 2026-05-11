@@ -1,61 +1,42 @@
-import dotenv from 'dotenv';
 import { FacebookAdsApi, AdAccount } from 'facebook-nodejs-business-sdk';
+import { loadTokens, getToken, getAdAccountId } from './auth-manager.js';
+import { loadConfig } from './setup.js';
 
-// Načtení proměnných prostředí ze souboru .env
-dotenv.config();
+export const validateConfig = (): boolean => {
+  const cfg = loadConfig();
+  if (!cfg) return false;
+  const tokens = loadTokens();
+  return Object.keys(tokens).filter(k => !k.startsWith('_')).length > 0 || !!tokens._user;
+};
 
-// Definice rozhraní pro konfiguraci
-interface AppConfig {
-  facebookAppId: string | undefined;
-  facebookAppSecret: string | undefined;
-  facebookAccessToken: string | undefined;
-  facebookAccountId: string | undefined;
-  port: number;
-}
+export const initFacebookSdk = (pageId?: string) => {
+  let token: string;
+  try { token = getToken(pageId); }
+  catch { token = process.env.FACEBOOK_ACCESS_TOKEN || ''; }
+  if (!token) throw new Error('Nejsi přihlášen. Spusť: npx facebook-ads-mcp login');
+  FacebookAdsApi.init(token);
+};
 
-// Načtení konfigurace z proměnných prostředí
-export const config: AppConfig = {
-  facebookAppId: process.env.FACEBOOK_APP_ID,
-  facebookAppSecret: process.env.FACEBOOK_APP_SECRET,
+export const getActiveToken = (pageId?: string): string => {
+  try { return getToken(pageId); }
+  catch { return process.env.FACEBOOK_ACCESS_TOKEN || ''; }
+};
+
+export const getActiveAccountId = (): string => {
+  const fromManager = getAdAccountId();
+  return fromManager || process.env.FACEBOOK_ACCOUNT_ID || '';
+};
+
+export const getAdAccount = (): AdAccount => {
+  const accountId = getActiveAccountId();
+  if (!accountId) throw new Error('Žádný reklamní účet nenalezen. Přihlas se přes: npx facebook-ads-mcp login');
+  return new AdAccount(accountId);
+};
+
+export const config = {
+  facebookAppId: loadConfig()?.appId || process.env.FACEBOOK_APP_ID,
+  facebookAppSecret: loadConfig()?.appSecret || process.env.FACEBOOK_APP_SECRET,
   facebookAccessToken: process.env.FACEBOOK_ACCESS_TOKEN,
   facebookAccountId: process.env.FACEBOOK_ACCOUNT_ID,
-  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000, // Default port 3000
+  port: 3000,
 };
-
-// Funkce pro validaci konfigurace
-export const validateConfig = (): boolean => {
-  const requiredVars: (keyof AppConfig)[] = [
-    'facebookAppId',
-    'facebookAppSecret',
-    'facebookAccessToken',
-    'facebookAccountId',
-  ];
-
-  for (const key of requiredVars) {
-    if (!config[key]) {
-      console.error(`Chybějící konfigurační proměnná: ${key.toUpperCase()}`);
-      return false;
-    }
-  }
-  return true;
-};
-
-// Funkce pro inicializaci Facebook SDK
-export const initFacebookSdk = () => {
-  if (!validateConfig()) {
-    throw new Error('Nelze inicializovat Facebook SDK: Chybí konfigurace.');
-  }
-  // We know these are defined because validateConfig passed
-  FacebookAdsApi.init(config.facebookAccessToken!);
-  // Optional: Set a default AdAccount instance if needed frequently
-  // const account = new AdAccount(config.facebookAccountId!);
-  // console.log('Facebook SDK inicializováno pro účet:', config.facebookAccountId);
-};
-
-// Funkce pro získání instance AdAccount
-export const getAdAccount = (): AdAccount => {
-   if (!config.facebookAccountId) {
-       throw new Error('Facebook Account ID není nakonfigurováno.');
-   }
-   return new AdAccount(config.facebookAccountId);
-}

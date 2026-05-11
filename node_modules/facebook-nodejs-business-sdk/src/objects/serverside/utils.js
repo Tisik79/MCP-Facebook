@@ -12,6 +12,7 @@ import DeliveryCategory from './delivery-category.js';
 const sha256 = require('js-sha256');
 const currency_codes = require('currency-codes');
 const country_codes = require('iso-3166-1');
+const validator = require('email-validator');
 
 const PHONE_NUMBER_IGNORE_CHAR_SET = /[\-@#<>'",; ]|\(|\)|\+|[a-z]/g;
 const PHONE_NUMBER_DROP_PREFIX_ZEROS = /^\+?0{0,2}/;
@@ -115,20 +116,23 @@ export default class ServerSideUtils {
   }
 
   /**
-   * Normalizes the given currency string and returns acceptable three letter  ISO code
-   * @param  {String} [currency] country value to be normalized.
+   * Normalizes the given currency string and returns acceptable three letter ISO code
+   * @param  {String} [currency] Currency value to be normalized.
    * @return {String} Normalized ISO currency code.
    */
-  static normalizeCurrency (currency: string) {
-    currency = currency.trim().toLowerCase();
+  static normalizeCurrency(currency: string) {
+    // Convert the input currency string to uppercase
+    currency = currency.trim().toUpperCase();
 
-    // Retain only alpha characters bounded for ISO code.
-    currency = currency.replace(/[^a-zA-Z]/g, '');
+    // Retain only uppercase alphabetic characters (A-Z) bounded for ISO code
+    currency = currency.replace(/[^A-Z]/g, '');
 
-    if (!currency_codes.codes().includes(currency.toUpperCase())) {
-      throw new Error("Invalid format for currency:'" + currency + "'.Please follow ISO 4217 3-letter standard for representing currency. Eg: usd");
+    // Check if the normalized currency is a valid ISO 4217 code
+    if (!currency_codes.codes().includes(currency)) {
+      throw new Error("Invalid format for currency: '" + currency + "'. Please follow ISO 4217 3-letter standard for representing currency. Eg: USD");
     }
 
+    // Return the normalized, uppercase currency code
     return currency;
   }
 
@@ -150,15 +154,12 @@ export default class ServerSideUtils {
   }
 
   /**
-   * Normalizes the given email to RFC 822 standard and returns acceptable email value
    * @param  {String} [email] email value to be normalized.
    * @return {String} Normalized email value.
    */
   static normalizeEmail (email: string) {
-    // RFC 2822 REGEX approximation
-    const EMAIL_RE = /^[\w!#\$%&'\*\+\/\=\?\^`\{\|\}~\-]+(:?\.[\w!#\$%&'\*\+\/\=\?\^`\{\|\}~\-]+)*@(?:[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?$/i;
-
-    if (!EMAIL_RE.test(email)) {
+    // Use email-validator to validate the email format
+    if (!validator.validate(email)) {
       throw new Error("Invalid email format for the passed email:'" + email + "'.Please check the passed email format.");
     }
 
@@ -205,7 +206,7 @@ export default class ServerSideUtils {
       phone_number = phone_number.replace(PHONE_NUMBER_DROP_PREFIX_ZEROS, '');
     }
 
-    if (phone_number.length < 7 || phone_number.length > 15) {
+    if (phone_number.length < 7 || phone_number.length > 16) {
       throw new Error("Invalid phone number format for the passed phone number:'" + phone_number + "'.Please check the passed phone number format.");
     }
 

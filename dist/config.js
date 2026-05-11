@@ -1,56 +1,56 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAdAccount = exports.initFacebookSdk = exports.validateConfig = exports.config = void 0;
-const dotenv_1 = __importDefault(require("dotenv"));
+exports.config = exports.getAdAccount = exports.getActiveAccountId = exports.getActiveToken = exports.initFacebookSdk = exports.validateConfig = void 0;
 const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
-// Načtení proměnných prostředí ze souboru .env
-dotenv_1.default.config();
-// Načtení konfigurace z proměnných prostředí
-exports.config = {
-    facebookAppId: process.env.FACEBOOK_APP_ID,
-    facebookAppSecret: process.env.FACEBOOK_APP_SECRET,
-    facebookAccessToken: process.env.FACEBOOK_ACCESS_TOKEN,
-    facebookAccountId: process.env.FACEBOOK_ACCOUNT_ID,
-    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000, // Default port 3000
-};
-// Funkce pro validaci konfigurace
+const auth_manager_js_1 = require("./auth-manager.js");
+const setup_js_1 = require("./setup.js");
 const validateConfig = () => {
-    const requiredVars = [
-        'facebookAppId',
-        'facebookAppSecret',
-        'facebookAccessToken',
-        'facebookAccountId',
-    ];
-    for (const key of requiredVars) {
-        if (!exports.config[key]) {
-            console.error(`Chybějící konfigurační proměnná: ${key.toUpperCase()}`);
-            return false;
-        }
-    }
-    return true;
+    const cfg = (0, setup_js_1.loadConfig)();
+    if (!cfg)
+        return false;
+    const tokens = (0, auth_manager_js_1.loadTokens)();
+    return Object.keys(tokens).filter(k => !k.startsWith('_')).length > 0 || !!tokens._user;
 };
 exports.validateConfig = validateConfig;
-// Funkce pro inicializaci Facebook SDK
-const initFacebookSdk = () => {
-    if (!(0, exports.validateConfig)()) {
-        throw new Error('Nelze inicializovat Facebook SDK: Chybí konfigurace.');
+const initFacebookSdk = (pageId) => {
+    let token;
+    try {
+        token = (0, auth_manager_js_1.getToken)(pageId);
     }
-    // We know these are defined because validateConfig passed
-    facebook_nodejs_business_sdk_1.FacebookAdsApi.init(exports.config.facebookAccessToken);
-    // Optional: Set a default AdAccount instance if needed frequently
-    // const account = new AdAccount(config.facebookAccountId!);
-    // console.log('Facebook SDK inicializováno pro účet:', config.facebookAccountId);
+    catch {
+        token = process.env.FACEBOOK_ACCESS_TOKEN || '';
+    }
+    if (!token)
+        throw new Error('Nejsi přihlášen. Spusť: npx facebook-ads-mcp login');
+    facebook_nodejs_business_sdk_1.FacebookAdsApi.init(token);
 };
 exports.initFacebookSdk = initFacebookSdk;
-// Funkce pro získání instance AdAccount
-const getAdAccount = () => {
-    if (!exports.config.facebookAccountId) {
-        throw new Error('Facebook Account ID není nakonfigurováno.');
+const getActiveToken = (pageId) => {
+    try {
+        return (0, auth_manager_js_1.getToken)(pageId);
     }
-    return new facebook_nodejs_business_sdk_1.AdAccount(exports.config.facebookAccountId);
+    catch {
+        return process.env.FACEBOOK_ACCESS_TOKEN || '';
+    }
+};
+exports.getActiveToken = getActiveToken;
+const getActiveAccountId = () => {
+    const fromManager = (0, auth_manager_js_1.getAdAccountId)();
+    return fromManager || process.env.FACEBOOK_ACCOUNT_ID || '';
+};
+exports.getActiveAccountId = getActiveAccountId;
+const getAdAccount = () => {
+    const accountId = (0, exports.getActiveAccountId)();
+    if (!accountId)
+        throw new Error('Žádný reklamní účet nenalezen. Přihlas se přes: npx facebook-ads-mcp login');
+    return new facebook_nodejs_business_sdk_1.AdAccount(accountId);
 };
 exports.getAdAccount = getAdAccount;
+exports.config = {
+    facebookAppId: (0, setup_js_1.loadConfig)()?.appId || process.env.FACEBOOK_APP_ID,
+    facebookAppSecret: (0, setup_js_1.loadConfig)()?.appSecret || process.env.FACEBOOK_APP_SECRET,
+    facebookAccessToken: process.env.FACEBOOK_ACCESS_TOKEN,
+    facebookAccountId: process.env.FACEBOOK_ACCOUNT_ID,
+    port: 3000,
+};
 //# sourceMappingURL=config.js.map

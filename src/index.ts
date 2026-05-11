@@ -3,6 +3,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport as StdioTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod'; // Import zod for schema definition
 import { initFacebookSdk, validateConfig } from './config.js';
+import { listConnectedPages } from './auth-manager.js';
+import { ensureAuth } from './auth-entry.js';
 import * as campaignTools from './tools/campaign-tools.js';
 import * as audienceTools from './tools/audience-tools.js';
 import * as analyticsTools from './tools/analytics-tools.js';
@@ -615,14 +617,34 @@ const initializeServer = async (): Promise<McpServer> => {
   );
 
 
+  
+  
+  server.tool(
+    'list_connected_accounts',
+    {},
+    async () => {
+      const pages = listConnectedPages();
+      if (pages.length === 0) {
+        return { content: [{ type: 'text', text: 'Zadne propojene ucty.\nPrihlaste se pres: http://localhost:3456/auth/login' }] };
+      }
+      let text = 'Propojene Facebook ucty (' + pages.length + '):\n\n';
+      pages.forEach((p: {id: string; name: string; category?: string}, i: number) => {
+        text += (i + 1) + '. ' + p.name + ' (ID: ' + p.id + ')' + (p.category ? ' - ' + p.category : '') + '\n';
+      });
+      text += '\nPro pridani dalsich uctu: http://localhost:3456/auth/login\nStatus: http://localhost:3456/status';
+      return { content: [{ type: 'text', text }] };
+    }
+  );
+
   return server; // Return the created server instance
 };
 
 // Hlavní funkce pro spuštění serveru
 const startServer = async () => {
   try {
-    // console.log('🚀 Inicializace MCP serveru...'); // Removed console log
-    const server = await initializeServer(); // Directly get the server instance
+    // Zajisti ze uzivatel je prihlasen
+    await ensureAuth();
+    const server = await initializeServer();
 
     // Create transport here
     const transport = new StdioTransport();

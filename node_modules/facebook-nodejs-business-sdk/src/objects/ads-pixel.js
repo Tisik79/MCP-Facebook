@@ -42,6 +42,7 @@ export default class AdsPixel extends AbstractCrudObject {
       event_time_max: 'event_time_max',
       event_time_min: 'event_time_min',
       first_party_cookie_status: 'first_party_cookie_status',
+      has_1p_pixel_event: 'has_1p_pixel_event',
       id: 'id',
       is_consolidated_container: 'is_consolidated_container',
       is_created_by_business: 'is_created_by_business',
@@ -98,6 +99,14 @@ export default class AdsPixel extends AbstractCrudObject {
       first_party_cookie_enabled: 'FIRST_PARTY_COOKIE_ENABLED',
     });
   }
+  static get PermittedTasks (): Object {
+    return Object.freeze({
+      advertise: 'ADVERTISE',
+      analyze: 'ANALYZE',
+      edit: 'EDIT',
+      upload: 'UPLOAD',
+    });
+  }
   static get Tasks (): Object {
     return Object.freeze({
       aa_analyze: 'AA_ANALYZE',
@@ -118,6 +127,13 @@ export default class AdsPixel extends AbstractCrudObject {
     );
   }
 
+  deleteAgencies (params: Object = {}): Promise<*> {
+    return super.deleteEdge(
+      '/agencies',
+      params
+    );
+  }
+
   getAgencies (fields: Array<string>, params: Object = {}, fetchFirstPage: boolean = true): Cursor | Promise<*> {
     return this.getEdge(
       Business,
@@ -125,6 +141,16 @@ export default class AdsPixel extends AbstractCrudObject {
       params,
       fetchFirstPage,
       '/agencies'
+    );
+  }
+
+  createAgency (fields: Array<string>, params: Object = {}, pathOverride?: ?string = null): Promise<AdsPixel> {
+    return this.createEdge(
+      '/agencies',
+      fields,
+      params,
+      AdsPixel,
+      pathOverride,
     );
   }
 
@@ -171,16 +197,6 @@ export default class AdsPixel extends AbstractCrudObject {
   createEvent (fields: Array<string>, params: Object = {}, pathOverride?: ?string = null): Promise<AbstractObject> {
     return this.createEdge(
       '/events',
-      fields,
-      params,
-      null,
-      pathOverride,
-    );
-  }
-
-  createMeapitocapiconsolidationhelper (fields: Array<string>, params: Object = {}, pathOverride?: ?string = null): Promise<AbstractObject> {
-    return this.createEdge(
-      '/meapitocapiconsolidationhelper',
       fields,
       params,
       null,
@@ -262,16 +278,6 @@ export default class AdsPixel extends AbstractCrudObject {
       params,
       fetchFirstPage,
       '/stats'
-    );
-  }
-
-  createTelemetry (fields: Array<string>, params: Object = {}, pathOverride?: ?string = null): Promise<AbstractObject> {
-    return this.createEdge(
-      '/telemetry',
-      fields,
-      params,
-      null,
-      pathOverride,
     );
   }
 

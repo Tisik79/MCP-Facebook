@@ -19,6 +19,7 @@ export default class Dataset extends AbstractCrudObject {
   static get Fields (): Object {
     return Object.freeze({
       id: 'id',
+      name: 'name',
     });
   }
 

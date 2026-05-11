@@ -40,6 +40,8 @@ const zod_1 = require("zod"); // Import zod for schema definition
 const config_js_1 = require("./config.js");
 const auth_manager_js_1 = require("./auth-manager.js");
 const auth_entry_js_1 = require("./auth-entry.js");
+const setup_js_1 = require("./setup.js");
+const child_process_1 = require("child_process");
 const campaignTools = __importStar(require("./tools/campaign-tools.js"));
 const audienceTools = __importStar(require("./tools/audience-tools.js"));
 const analyticsTools = __importStar(require("./tools/analytics-tools.js"));
@@ -530,6 +532,21 @@ const initializeServer = async () => {
         text += '\nPro pridani dalsich uctu: http://localhost:3456/auth/login\nStatus: http://localhost:3456/status';
         return { content: [{ type: 'text', text }] };
     });
+    server.tool('connect_facebook_account', {}, async () => {
+        const cfg = (0, setup_js_1.loadConfig)();
+        if (!cfg) {
+            return { content: [{ type: 'text', text: 'Neni nastavena Facebook App. Spust nejdrive setup.' }] };
+        }
+        const port = 3456;
+        const redirectUri = 'http://localhost:' + port + '/auth/callback';
+        const scopes = 'ads_management,ads_read,pages_manage_ads,pages_read_engagement,pages_show_list,business_management';
+        const loginUrl = 'https://www.facebook.com/v19.0/dialog/oauth?client_id=' + cfg.appId +
+            '&redirect_uri=' + encodeURIComponent(redirectUri) +
+            '&scope=' + scopes + '&response_type=code';
+        const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+        (0, child_process_1.exec)(openCmd + ' "' + loginUrl + '"');
+        return { content: [{ type: 'text', text: 'Oteviram Facebook prihlaseni v prohlizeci.\n\nPo uspesnem prihlaseni se vsechny tvoje stranky automaticky propoji. Pote rici: Zobraz propojene ucty.' }] };
+    });
     return server; // Return the created server instance
 };
 // Hlavní funkce pro spuštění serveru
@@ -538,6 +555,11 @@ const startServer = async () => {
         // Zajisti ze uzivatel je prihlasen
         await (0, auth_entry_js_1.ensureAuth)();
         const server = await initializeServer();
+        // Spust OAuth callback server (pro connect_facebook_account)
+        const { startAuthServer } = await import('./auth-manager.js');
+        const cfg = (0, setup_js_1.loadConfig)();
+        if (cfg)
+            startAuthServer(cfg.appId, cfg.appSecret);
         // Create transport here
         const transport = new stdio_js_1.StdioServerTransport();
         // Handle graceful shutdown

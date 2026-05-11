@@ -5,6 +5,8 @@ import { z } from 'zod'; // Import zod for schema definition
 import { initFacebookSdk, validateConfig } from './config.js';
 import { listConnectedPages } from './auth-manager.js';
 import { ensureAuth } from './auth-entry.js';
+import { loadConfig } from './setup.js';
+import { exec } from 'child_process';
 import * as campaignTools from './tools/campaign-tools.js';
 import * as audienceTools from './tools/audience-tools.js';
 import * as analyticsTools from './tools/analytics-tools.js';
@@ -636,6 +638,27 @@ const initializeServer = async (): Promise<McpServer> => {
     }
   );
 
+  
+  server.tool(
+    'connect_facebook_account',
+    {},
+    async () => {
+      const cfg = loadConfig();
+      if (!cfg) {
+        return { content: [{ type: 'text', text: 'Neni nastavena Facebook App. Spust nejdrive setup.' }] };
+      }
+      const port = 3456;
+      const redirectUri = 'http://localhost:' + port + '/auth/callback';
+      const scopes = 'ads_management,ads_read,pages_manage_ads,pages_read_engagement,pages_show_list,business_management';
+      const loginUrl = 'https://www.facebook.com/v19.0/dialog/oauth?client_id=' + cfg.appId +
+        '&redirect_uri=' + encodeURIComponent(redirectUri) +
+        '&scope=' + scopes + '&response_type=code';
+      const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      exec(openCmd + ' "' + loginUrl + '"');
+      return { content: [{ type: 'text', text: 'Oteviram Facebook prihlaseni v prohlizeci.\n\nPo uspesnem prihlaseni se vsechny tvoje stranky automaticky propoji. Pote rici: Zobraz propojene ucty.' }] };
+    }
+  );
+
   return server; // Return the created server instance
 };
 
@@ -645,6 +668,10 @@ const startServer = async () => {
     // Zajisti ze uzivatel je prihlasen
     await ensureAuth();
     const server = await initializeServer();
+    // Spust OAuth callback server (pro connect_facebook_account)
+    const { startAuthServer } = await import('./auth-manager.js');
+    const cfg = loadConfig();
+    if (cfg) startAuthServer(cfg.appId, cfg.appSecret);
 
     // Create transport here
     const transport = new StdioTransport();

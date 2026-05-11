@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 
-const TOKENS_FILE = path.resolve(process.cwd(), 'tokens.json');
+const SERVER_DIR = path.resolve(path.dirname(process.argv[1] || ''), '..');
+const TOKENS_FILE = path.resolve(SERVER_DIR, 'tokens.json');
+const CONFIG_FILE_PATH = path.resolve(SERVER_DIR, 'fb-config.json');
 const AUTH_PORT = 3456;
 
 export interface PageToken {

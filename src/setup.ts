@@ -4,8 +4,9 @@ import readline from 'readline';
 import { createServer } from 'http';
 import { exec } from 'child_process';
 
-const CONFIG_FILE = path.resolve(process.cwd(), 'fb-config.json');
-const TOKENS_FILE = path.resolve(process.cwd(), 'tokens.json');
+const SERVER_DIR = path.resolve(path.dirname(process.argv[1] || ''), '..');
+const CONFIG_FILE = path.resolve(SERVER_DIR, 'fb-config.json');
+const TOKENS_FILE = path.resolve(SERVER_DIR, 'tokens.json');
 const AUTH_PORT = 3456;
 
 export interface FbConfig {

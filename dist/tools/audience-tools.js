@@ -1,0 +1,274 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.addUsersToCustomAudience = exports.createLookalikeAudience = exports.deleteCustomAudience = exports.updateCustomAudience = exports.getCustomAudienceDetails = exports.getCustomAudiences = exports.createCustomAudience = void 0;
+const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
+const config_js_1 = require("../config.js"); // Added .js extension
+// Získání instance AdAccount
+const getAdAccount = () => {
+    // Corrected config access
+    if (!config_js_1.config.facebookAccountId) {
+        throw new Error('Facebook Account ID není nakonfigurováno v config.js');
+    }
+    return new facebook_nodejs_business_sdk_1.AdAccount(config_js_1.config.facebookAccountId);
+};
+// Vytvoření vlastního publika
+const createCustomAudience = async (name, description, customerFileSource, subtype = 'CUSTOM') => {
+    try {
+        const adAccount = getAdAccount();
+        // Připravení parametrů pro vytvoření publika
+        const params = {
+            name,
+            description,
+            customer_file_source: customerFileSource,
+            subtype
+        };
+        // Define fields to retrieve after creation
+        const fieldsToRead = ['id', 'name', 'description', 'subtype', 'approximate_count'];
+        // Vytvoření vlastního publika and request fields in response
+        const audience = await adAccount.createCustomAudience(fieldsToRead, params);
+        // The result object itself should now contain the requested fields
+        const audienceData = {
+            id: audience.id, // ID should be directly accessible
+            name: audience._data?.name,
+            description: audience._data?.description,
+            subtype: audience._data?.subtype,
+            approximateCount: audience._data?.approximate_count,
+        };
+        return {
+            success: true,
+            audienceId: audienceData.id, // Keep audienceId for consistency
+            audienceData: audienceData, // Return the fetched data
+            message: 'Vlastní publikum bylo úspěšně vytvořeno a data načtena.'
+        };
+    }
+    catch (error) {
+        console.error('Chyba při vytváření vlastního publika:', error);
+        return {
+            success: false,
+            message: `Chyba při vytváření vlastního publika: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.createCustomAudience = createCustomAudience;
+// Získání seznamu vlastních publik
+const getCustomAudiences = async (limit = 10) => {
+    try {
+        const adAccount = getAdAccount();
+        // Nastavení polí pro získání vlastních publik - optimalizovaná pole
+        const fields = [
+            'id',
+            'name',
+            'description',
+            'subtype',
+            'approximate_count'
+            // Removed unused fields: time_created, time_updated, customer_file_source, data_source, rule
+        ];
+        const params = {
+            limit
+        };
+        // Získání vlastních publik
+        const audiences = await adAccount.getCustomAudiences(fields, params);
+        // Formátování výsledků - access properties via _data
+        return {
+            success: true,
+            // Use 'any' type for audience in map to bypass type incompatibility for now
+            audiences: audiences.map((audience) => ({
+                id: audience.id,
+                name: audience._data?.name,
+                description: audience._data?.description,
+                subtype: audience._data?.subtype,
+                approximateCount: audience._data?.approximate_count
+                // Removed unused fields from mapping
+            }))
+        };
+    }
+    catch (error) {
+        console.error('Chyba při získávání vlastních publik:', error);
+        return {
+            success: false,
+            message: `Chyba při získávání vlastních publik: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.getCustomAudiences = getCustomAudiences;
+// Získání detailů o konkrétním publiku
+const getCustomAudienceDetails = async (audienceId) => {
+    try {
+        // Získání objektu vlastního publika
+        const customAudience = new facebook_nodejs_business_sdk_1.CustomAudience(audienceId);
+        // Načtení detailů vlastního publika
+        const fields = [
+            'id',
+            'name',
+            'description',
+            'subtype',
+            'approximate_count',
+            'time_created',
+            'time_updated',
+            'customer_file_source',
+            'data_source',
+            'rule',
+            'operation_status',
+            'permission_for_actions'
+        ];
+        const audienceDetails = await customAudience.get(fields);
+        // Formátování výsledku - access properties via _data
+        return {
+            success: true,
+            audience: {
+                id: audienceDetails.id, // ID is usually directly accessible
+                name: audienceDetails._data?.name,
+                description: audienceDetails._data?.description,
+                subtype: audienceDetails._data?.subtype,
+                approximateCount: audienceDetails._data?.approximate_count,
+                timeCreated: audienceDetails._data?.time_created,
+                timeUpdated: audienceDetails._data?.time_updated,
+                customerFileSource: audienceDetails._data?.customer_file_source,
+                dataSource: audienceDetails._data?.data_source,
+                rule: audienceDetails._data?.rule,
+                operationStatus: audienceDetails._data?.operation_status,
+                permissionForActions: audienceDetails._data?.permission_for_actions
+            }
+        };
+    }
+    catch (error) {
+        console.error('Chyba při získávání detailů vlastního publika:', error);
+        return {
+            success: false,
+            message: `Chyba při získávání detailů vlastního publika: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.getCustomAudienceDetails = getCustomAudienceDetails;
+// Aktualizace vlastního publika
+const updateCustomAudience = async (audienceId, name, description) => {
+    try {
+        // Získání objektu vlastního publika
+        const customAudience = new facebook_nodejs_business_sdk_1.CustomAudience(audienceId);
+        // Příprava parametrů pro aktualizaci
+        const params = {};
+        if (name)
+            params.name = name;
+        if (description)
+            params.description = description;
+        // Aktualizace vlastního publika
+        await customAudience.update(params);
+        return {
+            success: true,
+            message: 'Vlastní publikum bylo úspěšně aktualizováno'
+        };
+    }
+    catch (error) {
+        console.error('Chyba při aktualizaci vlastního publika:', error);
+        return {
+            success: false,
+            message: `Chyba při aktualizaci vlastního publika: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.updateCustomAudience = updateCustomAudience;
+// Odstranění vlastního publika
+const deleteCustomAudience = async (audienceId) => {
+    try {
+        // Získání objektu vlastního publika
+        const customAudience = new facebook_nodejs_business_sdk_1.CustomAudience(audienceId);
+        // Odstranění vlastního publika - pass empty fields array
+        await customAudience.delete([]);
+        return {
+            success: true,
+            message: 'Vlastní publikum bylo úspěšně odstraněno'
+        };
+    }
+    catch (error) {
+        console.error('Chyba při odstraňování vlastního publika:', error);
+        return {
+            success: false,
+            message: `Chyba při odstraňování vlastního publika: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.deleteCustomAudience = deleteCustomAudience;
+// Vytvoření lookalike audience (podobného publika) na základě existujícího publika
+const createLookalikeAudience = async (sourceAudienceId, name, description, country, ratio = 0.01 // 1% jako výchozí hodnota
+) => {
+    try {
+        const adAccount = getAdAccount();
+        // Validace poměru (ratio musí být mezi 0.01 a 0.20)
+        if (ratio < 0.01 || ratio > 0.2) {
+            return {
+                success: false,
+                message: 'Poměr lookalike audience musí být mezi 0.01 a 0.2 (1% až 20%)'
+            };
+        }
+        // Parametry pro vytvoření lookalike audience
+        const params = {
+            name,
+            description,
+            origin_audience_id: sourceAudienceId,
+            subtype: 'LOOKALIKE',
+            lookalike_spec: JSON.stringify({
+                country,
+                ratio,
+                type: 'CUSTOM_AUDIENCE'
+            })
+        };
+        // Define fields to retrieve after creation
+        const fieldsToReadLookalike = ['id', 'name', 'description', 'subtype', 'approximate_count'];
+        // Vytvoření lookalike audience and request fields in response
+        const result = await adAccount.createCustomAudience(fieldsToReadLookalike, params);
+        // The result object itself should now contain the requested fields
+        const lookalikeData = {
+            id: result.id, // ID should be directly accessible
+            name: result._data?.name,
+            description: result._data?.description,
+            subtype: result._data?.subtype,
+            approximateCount: result._data?.approximate_count,
+        };
+        return {
+            success: true,
+            audienceId: lookalikeData.id, // Keep audienceId for consistency
+            audienceData: lookalikeData, // Return the fetched data
+            message: 'Lookalike audience bylo úspěšně vytvořeno a data načtena.'
+        };
+    }
+    catch (error) {
+        console.error('Chyba při vytváření lookalike audience:', error);
+        return {
+            success: false,
+            message: `Chyba při vytváření lookalike audience: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.createLookalikeAudience = createLookalikeAudience;
+// Přidání uživatelů do vlastního publika
+const addUsersToCustomAudience = async (audienceId, users, type = 'EMAIL') => {
+    try {
+        // Získání objektu vlastního publika
+        const customAudience = new facebook_nodejs_business_sdk_1.CustomAudience(audienceId);
+        // Příprava parametrů pro přidání uživatelů
+        const params = {
+            payload: {
+                schema: type.toLowerCase(),
+                data: users.map(user => user.data)
+            }
+        };
+        // Přidání uživatelů do vlastního publika - Method addUsers does not exist
+        // await customAudience.addUsers(params); // Commenting out for now
+        console.warn(`Metoda addUsers není dostupná v aktuální verzi SDK nebo typových definicích. Přidávání uživatelů je třeba implementovat jinak.`);
+        // Returning success: false until implemented correctly
+        return {
+            success: false, // Indicate failure as the core action is commented out
+            message: 'Funkce pro přidání uživatelů není momentálně implementována/podporována.'
+            // Removed duplicated success/message lines
+        };
+    }
+    catch (error) {
+        console.error('Chyba při přidávání uživatelů do vlastního publika:', error);
+        return {
+            success: false,
+            message: `Chyba při přidávání uživatelů do vlastního publika: ${error instanceof Error ? error.message : 'Neznámá chyba'}`
+        };
+    }
+};
+exports.addUsersToCustomAudience = addUsersToCustomAudience;
+//# sourceMappingURL=audience-tools.js.map

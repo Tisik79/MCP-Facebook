@@ -547,6 +547,98 @@ const initializeServer = async () => {
         (0, child_process_1.exec)(openCmd + ' "' + loginUrl + '"');
         return { content: [{ type: 'text', text: 'Oteviram Facebook prihlaseni v prohlizeci.\n\nPo uspesnem prihlaseni se vsechny tvoje stranky automaticky propoji. Pote rici: Zobraz propojene ucty.' }] };
     });
+    server.tool('connect_facebook_account', { force: zod_1.z.boolean().optional().describe('Prinutit nove prihlaseni i kdyz uz je ucet propojen') }, async ({ force }) => {
+        const { loadConfig } = await import('./setup.js');
+        const { runOAuthFlow } = await import('./setup.js');
+        const { listConnectedPages } = await import('./auth-manager.js');
+        const { exec } = await import('child_process');
+        const cfg = loadConfig();
+        if (!cfg) {
+            return { content: [{ type: 'text', text: 'Neni nastavena Facebook App.\nSpust nejprve: node dist/cli.js setup' }] };
+        }
+        const AUTH_PORT = 3456;
+        const REDIRECT_URI = 'http://localhost:' + AUTH_PORT + '/auth/callback';
+        const SCOPES = 'ads_management,ads_read,pages_manage_ads,pages_read_engagement,pages_show_list,business_management';
+        const loginUrl = 'https://www.facebook.com/v19.0/dialog/oauth?client_id=' + cfg.appId +
+            '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
+            '&scope=' + SCOPES + '&response_type=code';
+        // Otevri prohlizec
+        const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+        exec(openCmd + ' "' + loginUrl + '"');
+        // Spust OAuth server pro zachyceni callbacku
+        const { createServer } = await import('http');
+        const fs = await import('fs');
+        const path = await import('path');
+        const SERVER_DIR = path.resolve(path.dirname(process.argv[1] || ''), '..');
+        const TOKENS_FILE = path.resolve(SERVER_DIR, 'tokens.json');
+        const result = await new Promise((resolve, reject) => {
+            const server = createServer(async (req, res) => {
+                const url = new URL(req.url || '/', 'http://localhost:' + AUTH_PORT);
+                if (url.pathname !== '/auth/callback') {
+                    res.writeHead(404);
+                    res.end();
+                    return;
+                }
+                const code = url.searchParams.get('code');
+                if (!code) {
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end('<html><body style="font-family:sans-serif;padding:40px"><h1>Chyba prihlaseni</h1></body></html>');
+                    server.close();
+                    reject(new Error('Prihlaseni selhalo'));
+                    return;
+                }
+                try {
+                    const tokenRes = await fetch('https://graph.facebook.com/v19.0/oauth/access_token?client_id=' + cfg.appId + '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) + '&client_secret=' + cfg.appSecret + '&code=' + code);
+                    const tokenData = await tokenRes.json();
+                    if (tokenData.error)
+                        throw new Error(tokenData.error.message);
+                    const longRes = await fetch('https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=' + cfg.appId + '&client_secret=' + cfg.appSecret + '&fb_exchange_token=' + tokenData.access_token);
+                    const longData = await longRes.json();
+                    if (longData.error)
+                        throw new Error(longData.error.message);
+                    const longToken = longData.access_token;
+                    const [pagesRes, adRes] = await Promise.all([
+                        fetch('https://graph.facebook.com/v19.0/me/accounts?access_token=' + longToken + '&fields=id,name,category,access_token&limit=100'),
+                        fetch('https://graph.facebook.com/v19.0/me/adaccounts?access_token=' + longToken + '&fields=id,name,currency&limit=100')
+                    ]);
+                    const pagesData = await pagesRes.json();
+                    const adData = await adRes.json();
+                    const existing = fs.existsSync(TOKENS_FILE) ? JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8')) : {};
+                    existing._user = { access_token: longToken, expires: Date.now() + 60 * 24 * 60 * 60 * 1000 };
+                    if (!existing._ad_accounts)
+                        existing._ad_accounts = {};
+                    const pageNames = [];
+                    for (const page of pagesData.data || []) {
+                        existing[page.id] = { name: page.name, access_token: page.access_token, category: page.category };
+                        pageNames.push(page.name + ' (' + page.id + ')');
+                    }
+                    for (const acc of adData.data || []) {
+                        existing._ad_accounts[acc.id] = { name: acc.name, currency: acc.currency };
+                    }
+                    fs.writeFileSync(TOKENS_FILE, JSON.stringify(existing, null, 2));
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end('<html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;padding:20px"><h1 style="color:#1a7a4a">Prihlaseni uspesne!</h1><p>Propojeno stranek: ' + pageNames.length + '</p><ul>' + pageNames.map((n) => '<li>' + n + '</li>').join('') + '</ul><p><strong>Muzete zavrit toto okno a vratit se do Claude.</strong></p></body></html>');
+                    server.close();
+                    resolve('Uspesne propojeno ' + pageNames.length + ' stranek:\n' + pageNames.map((n) => '  - ' + n).join('\n'));
+                }
+                catch (err) {
+                    res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end('<html><body style="font-family:sans-serif;padding:40px"><h1>Chyba</h1><pre>' + err.message + '</pre></body></html>');
+                    server.close();
+                    reject(err);
+                }
+            });
+            server.listen(AUTH_PORT, () => { });
+            server.on('error', (err) => {
+                if (err.code === 'EADDRINUSE')
+                    reject(new Error('Port ' + AUTH_PORT + ' je obsazen. Zkus znovu za chvili.'));
+                else
+                    reject(err);
+            });
+            setTimeout(() => { server.close(); reject(new Error('Prihlaseni vyprselo (5 minut).')); }, 5 * 60 * 1000);
+        });
+        return { content: [{ type: 'text', text: '✅ ' + result + '\n\nPro zobrazeni vsech uctu pouzij: list_connected_accounts' }] };
+    });
     return server; // Return the created server instance
 };
 // Hlavní funkce pro spuštění serveru

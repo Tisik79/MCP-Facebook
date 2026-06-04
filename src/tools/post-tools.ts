@@ -1,5 +1,6 @@
 import { FacebookAdsApi } from 'facebook-nodejs-business-sdk';
 import { config } from '../config.js';
+import { getActivePage } from '../auth-manager.js';
 import fs from 'fs';
 import axios from 'axios';
 import FormData from 'form-data';
@@ -46,7 +47,7 @@ export async function create_post(content: string, link?: string, imagePath?: st
     // Pro textový příspěvek (případně s odkazem)
     if (!imagePath) {
       // Vytvoření příspěvku pomocí Graph API
-      const url = `https://graph.facebook.com/v18.0/${pageId}/feed`;
+      const url = `https://graph.facebook.com/v25.0/${pageId}/feed`;
       const postData: any = {
         message: content,
         access_token: pageAccessToken
@@ -98,7 +99,7 @@ export async function create_post(content: string, link?: string, imagePath?: st
       // Přidání obrázku
       formData.append('source', fs.createReadStream(imagePath));
 
-      const url = `https://graph.facebook.com/v18.0/${endpoint}`;
+      const url = `https://graph.facebook.com/v25.0/${endpoint}`;
       const response = await axios.post(url, formData, {
         headers: formData.getHeaders()
       });
@@ -119,13 +120,16 @@ export async function create_post(content: string, link?: string, imagePath?: st
 }
 
 /**
- * Získá informace o první dostupné Facebook stránce
+ * Získá informace o aktivní (nebo první dostupné) Facebook stránce.
  *
  * @returns Informace o stránce nebo null, pokud žádná není k dispozici
  */
 async function getPageInfo(): Promise<{ id: string, access_token: string } | null> {
+  // Nejprve aktivní stránka z uloženého přihlášení (tokens.json) – nevyžaduje volání API.
+  const active = getActivePage();
+  if (active) return { id: active.id, access_token: active.access_token };
   try {
-    const url = `https://graph.facebook.com/v18.0/me/accounts?access_token=${config.facebookAccessToken}`;
+    const url = `https://graph.facebook.com/v25.0/me/accounts?access_token=${config.facebookAccessToken}`;
     // Získání funkce fetch z dynamického importu
     const fetch = await fetchModule;
     const response = await fetch(url);

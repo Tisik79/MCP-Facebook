@@ -91,7 +91,7 @@ export function runOAuthFlow(appId: string, appSecret: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const REDIRECT_URI = `http://localhost:${AUTH_PORT}/auth/callback`;
     const SCOPES = 'ads_management,ads_read,pages_manage_ads,pages_read_engagement,pages_show_list,business_management';
-    const loginUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${SCOPES}&response_type=code`;
+    const loginUrl = `https://www.facebook.com/v25.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${SCOPES}&response_type=code`;
 
     process.stderr.write('\n🔗 Otevírám Facebook přihlášení v prohlížeči...\n');
     process.stderr.write('   Pokud se neotevře, jdi ručně na:\n');
@@ -116,20 +116,20 @@ export function runOAuthFlow(appId: string, appSecret: string): Promise<void> {
 
       try {
         // Krátkodobý token
-        const tokenRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&client_secret=${appSecret}&code=${code}`);
+        const tokenRes = await fetch(`https://graph.facebook.com/v25.0/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&client_secret=${appSecret}&code=${code}`);
         const tokenData = await tokenRes.json() as any;
         if (tokenData.error) throw new Error(tokenData.error.message);
 
         // Long-lived token (60 dní)
-        const longRes = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`);
+        const longRes = await fetch(`https://graph.facebook.com/v25.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`);
         const longData = await longRes.json() as any;
         if (longData.error) throw new Error(longData.error.message);
         const longToken = longData.access_token;
 
         // Načíst stránky a reklamní účty
         const [pagesRes, adRes] = await Promise.all([
-          fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${longToken}&fields=id,name,category,access_token&limit=100`),
-          fetch(`https://graph.facebook.com/v19.0/me/adaccounts?access_token=${longToken}&fields=id,name,currency&limit=100`)
+          fetch(`https://graph.facebook.com/v25.0/me/accounts?access_token=${longToken}&fields=id,name,category,access_token&limit=100`),
+          fetch(`https://graph.facebook.com/v25.0/me/adaccounts?access_token=${longToken}&fields=id,name,currency&limit=100`)
         ]);
         const pagesData = await pagesRes.json() as any;
         const adData = await adRes.json() as any;

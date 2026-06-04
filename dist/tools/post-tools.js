@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.create_post = create_post;
 const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
 const config_js_1 = require("../config.js");
+const auth_manager_js_1 = require("../auth-manager.js");
 const fs_1 = __importDefault(require("fs"));
 const axios_1 = __importDefault(require("axios"));
 const form_data_1 = __importDefault(require("form-data"));
@@ -45,7 +46,7 @@ async function create_post(content, link, imagePath) {
         // Pro textový příspěvek (případně s odkazem)
         if (!imagePath) {
             // Vytvoření příspěvku pomocí Graph API
-            const url = `https://graph.facebook.com/v18.0/${pageId}/feed`;
+            const url = `https://graph.facebook.com/v25.0/${pageId}/feed`;
             const postData = {
                 message: content,
                 access_token: pageAccessToken
@@ -86,7 +87,7 @@ async function create_post(content, link, imagePath) {
             }
             // Přidání obrázku
             formData.append('source', fs_1.default.createReadStream(imagePath));
-            const url = `https://graph.facebook.com/v18.0/${endpoint}`;
+            const url = `https://graph.facebook.com/v25.0/${endpoint}`;
             const response = await axios_1.default.post(url, formData, {
                 headers: formData.getHeaders()
             });
@@ -104,13 +105,17 @@ async function create_post(content, link, imagePath) {
     }
 }
 /**
- * Získá informace o první dostupné Facebook stránce
+ * Získá informace o aktivní (nebo první dostupné) Facebook stránce.
  *
  * @returns Informace o stránce nebo null, pokud žádná není k dispozici
  */
 async function getPageInfo() {
+    // Nejprve aktivní stránka z uloženého přihlášení (tokens.json) – nevyžaduje volání API.
+    const active = (0, auth_manager_js_1.getActivePage)();
+    if (active)
+        return { id: active.id, access_token: active.access_token };
     try {
-        const url = `https://graph.facebook.com/v18.0/me/accounts?access_token=${config_js_1.config.facebookAccessToken}`;
+        const url = `https://graph.facebook.com/v25.0/me/accounts?access_token=${config_js_1.config.facebookAccessToken}`;
         // Získání funkce fetch z dynamického importu
         const fetch = await fetchModule;
         const response = await fetch(url);

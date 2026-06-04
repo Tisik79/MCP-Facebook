@@ -39,30 +39,58 @@ const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const zod_1 = require("zod"); // Import zod for schema definition
 const config_js_1 = require("./config.js");
 const auth_manager_js_1 = require("./auth-manager.js");
-const auth_entry_js_1 = require("./auth-entry.js");
-const setup_js_1 = require("./setup.js");
 const child_process_1 = require("child_process");
 const campaignTools = __importStar(require("./tools/campaign-tools.js"));
 const audienceTools = __importStar(require("./tools/audience-tools.js"));
 const analyticsTools = __importStar(require("./tools/analytics-tools.js"));
 const adSetTools = __importStar(require("./tools/adset-tools.js")); // Import new adset tools
 const postTools = __importStar(require("./tools/post-tools.js")); // Import post tools
+const adTools = __importStar(require("./tools/ad-tools.js")); // Import ad/creative/media tools
+// Návod, jak získat přístup k Facebooku. Plná verze: docs/FACEBOOK_APP_SETUP.md
+const FB_APP_SETUP_GUIDE = [
+    '════════ JAK PŘIPOJIT FACEBOOK – NEJSNAZŠÍ ZPŮSOB (cca 1 minuta, bez nastavování aplikace) ════════',
+    '',
+    '1) Otevři Graph API Explorer: https://developers.facebook.com/tools/explorer/',
+    '2) Vpravo nahoře v poli "Meta App" / "Aplikace" vyber svou aplikaci.',
+    '   (Ideálně tu samou, jejíž App ID/Secret má MCP – jinak token vydrží jen pár hodin.)',
+    '3) Klikni "Generate Access Token" / "Generovat přístupový token" → vyber "Get User Access Token".',
+    '4) Do vyhledávacího pole oprávnění postupně napiš a zaškrtni:',
+    '     ads_management, ads_read, pages_show_list, pages_read_engagement,',
+    '     pages_manage_posts, pages_manage_ads, business_management',
+    '5) Klikni "Generate Access Token" → ve vyskakovacím okně Facebooku potvrď a povol přístup',
+    '   ke stránkám / podnikání, které chceš spravovat.',
+    '6) Zkopíruj vygenerovaný token (dlouhý řetězec, začíná "EAA...").',
+    '7) Tady v Claude napiš:  Nastav Facebook token: EAA...(sem vlož ten token)',
+    '   → MCP si sám stáhne a uloží stránky i reklamní účty a token prodlouží na ~60 dní.',
+    '',
+    'Nemáš žádnou aplikaci? V Graph API Exploreru klikni "Create App" (stačí typ "Business",',
+    'libovolný název) – nebo jdi na https://developers.facebook.com/apps/ → "Vytvořit aplikaci".',
+    'App ID a App Secret pak najdeš v Nastavení → Základní; pošli mi je a uložím je do fb-config.json',
+    '(token z Exploreru pak půjde prodloužit na 60 dní).',
+    '',
+    '──────── ALTERNATIVA: přihlášení přes okno (OAuth) ────────',
+    'Tohle vyžaduje nastavit aplikaci a Facebook často mění rozložení obrazovek, takže když',
+    'některou položku nevidíš, použij raději postup s Graph API Explorerem výše.',
+    '  a) Musí být přidaný produkt "Facebook Login" (nebo use case "Authenticate ... with Facebook Login").',
+    '     V novém rozhraní: levé menu → "Use cases" → přidat/Customize → tam je sekce Settings.',
+    '  b) V Nastavení → Základní: pole "Domény aplikací" = localhost; dole "+ Přidat platformu" → "Web"',
+    '     → URL webu: http://localhost:3456/  → Uložit.',
+    '  c) Facebook Login → Settings (nebo Use cases → ... → Settings):',
+    '     "Client OAuth Login" = Ano, "Web OAuth Login" = Ano,',
+    '     "Valid OAuth Redirect URIs" = http://localhost:3456/auth/callback  → Uložit.',
+    '  d) Režim aplikace stačí "Vývoj" (přihlašuješ se svým účtem). Pak v Claude: "Připoj Facebook účet".',
+    '',
+    'Stav serveru lze kdykoli ověřit i v prohlížeči: http://localhost:3456/status',
+].join('\n');
 // Funkce pro inicializaci serveru
 const initializeServer = async () => {
-    // Kontrola konfigurace
+    // Server smí nastartovat i bez přihlášení – uživatel se může přihlásit za běhu
+    // pomocí nástroje `connect_facebook_account`. Proto tady nic nevyhazujeme.
     if (!(0, config_js_1.validateConfig)()) {
-        console.error('Neplatná konfigurace. Zkontrolujte .env soubor nebo proměnné prostředí.');
-        throw new Error('Neplatná konfigurace. Zkontrolujte .env soubor nebo proměnné prostředí.');
+        console.error('[Facebook MCP] Zatím nejsi přihlášen k Facebooku. V Claude řekni: „Připoj Facebook účet".');
     }
-    // Inicializace Facebook SDK
-    try {
-        (0, config_js_1.initFacebookSdk)();
-        // console.log('Facebook SDK inicializováno.'); // Removed console log
-    }
-    catch (error) {
-        // console.error('Chyba při inicializaci Facebook SDK:', error); // Removed console error
-        // Re-throw the error to be caught by the main startServer catch block
-        throw new Error(`Chyba při inicializaci Facebook SDK: ${error instanceof Error ? error.message : error}`);
+    if (!(0, config_js_1.initFacebookSdk)()) {
+        console.error('[Facebook MCP] Facebook SDK zatím bez tokenu – nejdřív se přihlas.');
     }
     // Vytvoření serveru pomocí konstruktoru McpServer
     const server = new mcp_js_1.McpServer({
@@ -495,6 +523,48 @@ const initializeServer = async () => {
             content: [{ type: 'text', text: responseText }]
         };
     });
+    // --- Registrace nástrojů pro reklamy (Ads), kreativy a média ---
+    server.tool('upload_ad_media', {
+        file_path: zod_1.z.string().describe('Absolutní cesta k souboru – obrázek (jpg/png/gif) nebo video (mp4/mov)'),
+        description: zod_1.z.string().optional().describe('Volitelný popis videa')
+    }, async ({ file_path, description }) => {
+        const r = await adTools.uploadAdMedia(file_path, description);
+        const hint = r.success
+            ? (r.type === 'image' ? '\n(image_hash použij v object_story_spec)' : '\n(video_id použij v object_story_spec)')
+            : '';
+        return { content: [{ type: 'text', text: (r.success ? r.message : `Chyba: ${r.message}`) + hint }] };
+    });
+    server.tool('create_adcreative', {
+        name: zod_1.z.string().describe('Název kreativy'),
+        object_story_spec: zod_1.z.any().describe('Specifikace kreativy: page_id + link_data/video_data s image_hash/video_id (viz FB dokumentace)')
+    }, async ({ name, object_story_spec }) => {
+        const r = await adTools.createAdCreative(name, object_story_spec);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('create_ad', {
+        adset_id: zod_1.z.string().describe('ID reklamní sady (ad set)'),
+        name: zod_1.z.string().describe('Název reklamy'),
+        creative_id: zod_1.z.string().describe('ID kreativy (z create_adcreative)'),
+        status: zod_1.z.string().optional().describe('Status ACTIVE/PAUSED. Výchozí PAUSED – bez potvrzení uživatele nespouštět.')
+    }, async ({ adset_id, name, creative_id, status }) => {
+        const r = await adTools.createAd(adset_id, name, creative_id, status || 'PAUSED');
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('update_ad', {
+        ad_id: zod_1.z.string().describe('ID reklamy'),
+        name: zod_1.z.string().optional().describe('Nový název'),
+        status: zod_1.z.string().optional().describe('Nový status (ACTIVE/PAUSED/ARCHIVED)'),
+        creative_id: zod_1.z.string().optional().describe('Nové ID kreativy')
+    }, async ({ ad_id, name, status, creative_id }) => {
+        const r = await adTools.updateAd(ad_id, { name, status, creativeId: creative_id });
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('delete_ad', {
+        ad_id: zod_1.z.string().describe('ID reklamy – mazání je nevratné, jen po potvrzení')
+    }, async ({ ad_id }) => {
+        const r = await adTools.deleteAd(ad_id);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
     // --- Registrace nástrojů pro správu příspěvků ---
     server.tool('create_post', {
         content: zod_1.z.string().describe('Obsah příspěvku'),
@@ -520,152 +590,105 @@ const initializeServer = async () => {
             return { content: [{ type: 'text', text: `❌ Chyba při vytváření příspěvku: ${error.message}` }], isError: true };
         }
     });
-    server.tool('list_connected_accounts', {}, async () => {
-        const pages = (0, auth_manager_js_1.listConnectedPages)();
-        if (pages.length === 0) {
-            return { content: [{ type: 'text', text: 'Zadne propojene ucty.\nPrihlaste se pres: http://localhost:3456/auth/login' }] };
+    // --- Připojení Facebook účtu přes OAuth okno. Vyžaduje nastavenou aplikaci;
+    //     pokud nejde, použij set_facebook_token (token z Graph API Exploreru). ---
+    server.tool('connect_facebook_account', 'Přihlásí Facebook účet přes OAuth okno v prohlížeči; po přihlášení si MCP sám načte tokeny stránek a ID reklamních účtů. Když to selže (chyba o doménách aplikace), použij raději set_facebook_token.', {}, async () => {
+        const { appId, source } = (0, auth_manager_js_1.getAppCredentials)();
+        const url = (0, auth_manager_js_1.getOAuthDialogUrl)(appId);
+        const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+        (0, child_process_1.exec)(cmd + ' "' + url + '"');
+        const appNote = source === 'builtin' ? ' (vestavěná sdílená Facebook aplikace)' : '';
+        return { content: [{ type: 'text', text: 'Otevírám přihlášení k Facebooku v prohlížeči' + appNote + '.\n' +
+                        'Pokud se okno neotevřelo, jdi ručně na: ' + (0, auth_manager_js_1.getAuthLoginUrl)() + '\n\n' +
+                        'Po dokončení přihlášení si MCP sám uloží tokeny a propojené účty – pak řekni: „Zobraz propojené účty". Restart není potřeba.\n\n' +
+                        '⚠️ Pokud Facebook hlásí „URL se nedá načíst / Doména této adresy URL není součástí domén aplikací" nebo podobnou chybu:\n' +
+                        'NEJSNAZŠÍ řešení (nevyžaduje nastavení aplikace) – vygeneruj si token v Graph API Exploreru\n' +
+                        '(https://developers.facebook.com/tools/explorer/) s oprávněními ads_management, ads_read, pages_show_list,\n' +
+                        'pages_read_engagement, pages_manage_posts, pages_manage_ads, business_management, zkopíruj ho a tady řekni:\n' +
+                        '„Nastav Facebook token: EAA..." (nástroj set_facebook_token). Celý návod: nástroj facebook_setup_help.' }] };
+    });
+    server.tool('set_facebook_token', 'Uloží Facebook user access token získaný z Graph API Exploreru a sám si dotáhne propojené stránky i reklamní účty. Spolehlivá alternativa k connect_facebook_account, když nejde OAuth přihlášení.', {
+        token: zod_1.z.string().describe('User access token z https://developers.facebook.com/tools/explorer/ (dlouhý řetězec začínající "EAA...")'),
+    }, async ({ token }) => {
+        try {
+            const { appId, appSecret } = (0, auth_manager_js_1.getAppCredentials)();
+            const { pages, adAccounts, longLived } = await (0, auth_manager_js_1.setUserToken)(appId, appSecret, token);
+            let text = '✅ Token uložen a ověřen. ';
+            text += longLived
+                ? 'Platnost prodloužena na ~60 dní (poté se obnoví automaticky při startu).'
+                : '⚠️ Token zůstal krátkodobý (pár hodin). Aby šel prodloužit na 60 dní, vyber v Graph API Exploreru stejnou aplikaci, jejíž App ID/Secret má MCP.';
+            text += '\n\nPropojené stránky (' + pages.length + '):\n' + (pages.length ? pages.map(p => '  • ' + p).join('\n') : '  (žádné)');
+            text += '\n\nReklamní účty (' + adAccounts.length + '):\n' + (adAccounts.length ? adAccounts.map(a => '  • ' + a).join('\n') : '  (žádné)');
+            text += '\n\nHotovo – můžeš rovnou pracovat (restart není potřeba). Výchozí účet/stránku změníš nástrojem set_active_account.';
+            return { content: [{ type: 'text', text }] };
         }
-        let text = 'Propojene Facebook ucty (' + pages.length + '):\n\n';
+        catch (e) {
+            return { content: [{ type: 'text', text: '❌ Token se nepodařilo ověřit: ' + e.message + '\n' +
+                            'Zkontroluj, že jsi zkopíroval CELÝ token (začíná "EAA...", je velmi dlouhý) a že má potřebná oprávnění.\n' +
+                            'Návod, jak token získat: nástroj facebook_setup_help.' }], isError: true };
+        }
+    });
+    server.tool('facebook_setup_help', 'Vypíše krok-za-krokem návod, jak připojit Facebook (získat token z Graph API Exploreru, případně nastavit aplikaci pro OAuth).', {}, async () => ({ content: [{ type: 'text', text: FB_APP_SETUP_GUIDE }] }));
+    server.tool('list_connected_accounts', 'Vypíše propojené Facebook stránky a reklamní účty (a které jsou aktivní).', {}, async () => {
+        const pages = (0, auth_manager_js_1.listConnectedPages)();
+        const accs = (0, auth_manager_js_1.listConnectedAdAccounts)();
+        const tokens = (0, auth_manager_js_1.loadTokens)();
+        if (pages.length === 0 && accs.length === 0) {
+            return { content: [{ type: 'text', text: 'Žádné propojené účty. V Claude řekni: „Připoj Facebook účet".' }] };
+        }
+        let text = '';
+        if (tokens._user?.expires) {
+            const left = Math.max(0, Math.round((tokens._user.expires - Date.now()) / (24 * 3600 * 1000)));
+            text += 'Přihlášen (token platný ještě ~' + left + ' dní, obnoví se automaticky).\n\n';
+        }
+        text += 'Stránky (' + pages.length + '):\n';
         pages.forEach((p, i) => {
-            text += (i + 1) + '. ' + p.name + ' (ID: ' + p.id + ')' + (p.category ? ' - ' + p.category : '') + '\n';
+            text += '  ' + (i + 1) + '. ' + p.name + ' (ID: ' + p.id + ')' + (p.category ? ' – ' + p.category : '') + (p.active ? '  ← aktivní' : '') + '\n';
         });
-        text += '\nPro pridani dalsich uctu: http://localhost:3456/auth/login\nStatus: http://localhost:3456/status';
+        text += '\nReklamní účty (' + accs.length + '):\n';
+        accs.forEach((a, i) => {
+            text += '  ' + (i + 1) + '. ' + a.name + ' (' + a.id + ', ' + a.currency + ')' + (a.active ? '  ← aktivní' : '') + '\n';
+        });
+        text += '\nVýchozí účet/stránku změníš nástrojem set_active_account.';
         return { content: [{ type: 'text', text }] };
     });
-    server.tool('connect_facebook_account', {}, async () => {
-        const cfg = (0, setup_js_1.loadConfig)();
-        if (!cfg) {
-            return { content: [{ type: 'text', text: 'Neni nastavena Facebook App. Spust nejdrive setup.' }] };
+    server.tool('set_active_account', 'Nastaví výchozí (aktivní) Facebook stránku a/nebo reklamní účet, který se použije pro další operace.', {
+        pageId: zod_1.z.string().optional().describe('ID Facebook stránky (volitelné). Musí být mezi propojenými.'),
+        adAccountId: zod_1.z.string().optional().describe('ID reklamního účtu, např. "act_123..." (volitelné). Musí být mezi propojenými.'),
+    }, async ({ pageId, adAccountId }) => {
+        if (!pageId && !adAccountId) {
+            return { content: [{ type: 'text', text: 'Zadej alespoň pageId nebo adAccountId. Seznam zobrazíš nástrojem list_connected_accounts.' }] };
         }
-        const port = 3456;
-        const redirectUri = 'http://localhost:' + port + '/auth/callback';
-        const scopes = 'ads_management,ads_read,pages_manage_ads,pages_read_engagement,pages_show_list,business_management';
-        const loginUrl = 'https://www.facebook.com/v19.0/dialog/oauth?client_id=' + cfg.appId +
-            '&redirect_uri=' + encodeURIComponent(redirectUri) +
-            '&scope=' + scopes + '&response_type=code';
-        const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-        (0, child_process_1.exec)(openCmd + ' "' + loginUrl + '"');
-        return { content: [{ type: 'text', text: 'Oteviram Facebook prihlaseni v prohlizeci.\n\nPo uspesnem prihlaseni se vsechny tvoje stranky automaticky propoji. Pote rici: Zobraz propojene ucty.' }] };
-    });
-    server.tool('connect_facebook_account', { force: zod_1.z.boolean().optional().describe('Prinutit nove prihlaseni i kdyz uz je ucet propojen') }, async ({ force }) => {
-        const { loadConfig } = await import('./setup.js');
-        const { runOAuthFlow } = await import('./setup.js');
-        const { listConnectedPages } = await import('./auth-manager.js');
-        const { exec } = await import('child_process');
-        const cfg = loadConfig();
-        if (!cfg) {
-            return { content: [{ type: 'text', text: 'Neni nastavena Facebook App.\nSpust nejprve: node dist/cli.js setup' }] };
+        try {
+            const active = (0, auth_manager_js_1.setActiveSelection)({ pageId, adAccountId });
+            return { content: [{ type: 'text', text: 'Aktivní stránka: ' + (active.pageId || '—') + '\nAktivní reklamní účet: ' + (active.adAccountId || '—') }] };
         }
-        const AUTH_PORT = 3456;
-        const REDIRECT_URI = 'http://localhost:' + AUTH_PORT + '/auth/callback';
-        const SCOPES = 'ads_management,ads_read,pages_manage_ads,pages_read_engagement,pages_show_list,business_management';
-        const loginUrl = 'https://www.facebook.com/v19.0/dialog/oauth?client_id=' + cfg.appId +
-            '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
-            '&scope=' + SCOPES + '&response_type=code';
-        // Otevri prohlizec
-        const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-        exec(openCmd + ' "' + loginUrl + '"');
-        // Spust OAuth server pro zachyceni callbacku
-        const { createServer } = await import('http');
-        const fs = await import('fs');
-        const path = await import('path');
-        const SERVER_DIR = path.resolve(path.dirname(process.argv[1] || ''), '..');
-        const TOKENS_FILE = path.resolve(SERVER_DIR, 'tokens.json');
-        const result = await new Promise((resolve, reject) => {
-            const server = createServer(async (req, res) => {
-                const url = new URL(req.url || '/', 'http://localhost:' + AUTH_PORT);
-                if (url.pathname !== '/auth/callback') {
-                    res.writeHead(404);
-                    res.end();
-                    return;
-                }
-                const code = url.searchParams.get('code');
-                if (!code) {
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end('<html><body style="font-family:sans-serif;padding:40px"><h1>Chyba prihlaseni</h1></body></html>');
-                    server.close();
-                    reject(new Error('Prihlaseni selhalo'));
-                    return;
-                }
-                try {
-                    const tokenRes = await fetch('https://graph.facebook.com/v19.0/oauth/access_token?client_id=' + cfg.appId + '&redirect_uri=' + encodeURIComponent(REDIRECT_URI) + '&client_secret=' + cfg.appSecret + '&code=' + code);
-                    const tokenData = await tokenRes.json();
-                    if (tokenData.error)
-                        throw new Error(tokenData.error.message);
-                    const longRes = await fetch('https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=' + cfg.appId + '&client_secret=' + cfg.appSecret + '&fb_exchange_token=' + tokenData.access_token);
-                    const longData = await longRes.json();
-                    if (longData.error)
-                        throw new Error(longData.error.message);
-                    const longToken = longData.access_token;
-                    const [pagesRes, adRes] = await Promise.all([
-                        fetch('https://graph.facebook.com/v19.0/me/accounts?access_token=' + longToken + '&fields=id,name,category,access_token&limit=100'),
-                        fetch('https://graph.facebook.com/v19.0/me/adaccounts?access_token=' + longToken + '&fields=id,name,currency&limit=100')
-                    ]);
-                    const pagesData = await pagesRes.json();
-                    const adData = await adRes.json();
-                    const existing = fs.existsSync(TOKENS_FILE) ? JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8')) : {};
-                    existing._user = { access_token: longToken, expires: Date.now() + 60 * 24 * 60 * 60 * 1000 };
-                    if (!existing._ad_accounts)
-                        existing._ad_accounts = {};
-                    const pageNames = [];
-                    for (const page of pagesData.data || []) {
-                        existing[page.id] = { name: page.name, access_token: page.access_token, category: page.category };
-                        pageNames.push(page.name + ' (' + page.id + ')');
-                    }
-                    for (const acc of adData.data || []) {
-                        existing._ad_accounts[acc.id] = { name: acc.name, currency: acc.currency };
-                    }
-                    fs.writeFileSync(TOKENS_FILE, JSON.stringify(existing, null, 2));
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end('<html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;padding:20px"><h1 style="color:#1a7a4a">Prihlaseni uspesne!</h1><p>Propojeno stranek: ' + pageNames.length + '</p><ul>' + pageNames.map((n) => '<li>' + n + '</li>').join('') + '</ul><p><strong>Muzete zavrit toto okno a vratit se do Claude.</strong></p></body></html>');
-                    server.close();
-                    resolve('Uspesne propojeno ' + pageNames.length + ' stranek:\n' + pageNames.map((n) => '  - ' + n).join('\n'));
-                }
-                catch (err) {
-                    res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-                    res.end('<html><body style="font-family:sans-serif;padding:40px"><h1>Chyba</h1><pre>' + err.message + '</pre></body></html>');
-                    server.close();
-                    reject(err);
-                }
-            });
-            server.listen(AUTH_PORT, () => { });
-            server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE')
-                    reject(new Error('Port ' + AUTH_PORT + ' je obsazen. Zkus znovu za chvili.'));
-                else
-                    reject(err);
-            });
-            setTimeout(() => { server.close(); reject(new Error('Prihlaseni vyprselo (5 minut).')); }, 5 * 60 * 1000);
-        });
-        return { content: [{ type: 'text', text: '✅ ' + result + '\n\nPro zobrazeni vsech uctu pouzij: list_connected_accounts' }] };
+        catch (e) {
+            return { content: [{ type: 'text', text: '❌ ' + e.message }], isError: true };
+        }
     });
     return server; // Return the created server instance
 };
 // Hlavní funkce pro spuštění serveru
 const startServer = async () => {
     try {
-        // Zajisti ze uzivatel je prihlasen
-        await (0, auth_entry_js_1.ensureAuth)();
-        const server = await initializeServer();
-        // Spust OAuth callback server (pro connect_facebook_account)
-        const { startAuthServer } = await import('./auth-manager.js');
-        const cfg = (0, setup_js_1.loadConfig)();
-        if (cfg)
-            startAuthServer(cfg.appId, cfg.appSecret);
+        // App credentials: fb-config.json > env > vestavěná sdílená aplikace.
+        const { appId, appSecret, source } = (0, auth_manager_js_1.getAppCredentials)();
+        process.stderr.write('[Facebook MCP] Facebook app: ' + appId + ' (' + source + ')\n');
+        // Auto-refresh dlouhého tokenu (pokud se blíží expirace) – ještě před inicializací SDK.
+        await (0, auth_manager_js_1.refreshUserTokenIfNeeded)(appId, appSecret);
+        const server = await initializeServer(); // Directly get the server instance
         // Create transport here
         const transport = new stdio_js_1.StdioServerTransport();
         // Handle graceful shutdown
         const shutdown = async () => {
-            // console.log('🔌 Ukončování serveru...'); // Removed console log
-            // No explicit disconnect/stop needed for stdio transport based on examples
-            // console.log('✅ Server bude ukončen.'); // Removed console log
             process.exit(0);
         };
         process.on('SIGINT', shutdown); // Ctrl+C
         process.on('SIGTERM', shutdown); // Terminate signal
-        // Connect the server to the transport
+        // OAuth callback server na pozadí (neblokuje stdio) – obsluhuje přihlášení.
+        (0, auth_manager_js_1.startAuthServer)(appId, appSecret);
         await server.connect(transport);
-        // console.log('✅ MCP server úspěšně spuštěn a naslouchá na stdio.'); // Removed console log - Client should receive MCP messages only
     }
     catch (error) {
         // Log critical errors to stderr so they don't interfere with stdout MCP messages

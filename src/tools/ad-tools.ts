@@ -1,7 +1,10 @@
 import { AdAccount, Ad } from 'facebook-nodejs-business-sdk';
 import fs from 'fs';
 import path from 'path';
-import { config, initFacebookSdk } from '../config.js';
+import { config, initFacebookSdk, getActiveToken, getActiveAccountId } from '../config.js';
+
+// Graph API verze pro přímá HTTP volání (lze přepsat přes env, ať drží krok se SDK)
+const GRAPH_VERSION = process.env.FB_GRAPH_API_VERSION || 'v23.0';
 
 // Helper: instance aktivního reklamního účtu (z auth vrstvy přes config)
 const getAdAccount = (): AdAccount => {
@@ -31,18 +34,63 @@ const formatError = (error: unknown, prefix: string): string => {
   return msg;
 };
 
+// --- Přímý upload videa na /advideos (obchází nespolehlivý createAdVideo v SDK) ---
+// Podporuje lokální soubor (multipart) i veřejnou URL (file_url – FB si video stáhne sám).
+const uploadAdVideoDirect = async (filePathOrUrl: string, name: string, description?: string): Promise<string> => {
+  const token = getActiveToken();
+  if (!token) throw new Error('Chybí access token (přihlas se k Facebooku).');
+  let accountId = getActiveAccountId();
+  if (!accountId) throw new Error('Chybí reklamní účet.');
+  if (!accountId.startsWith('act_')) accountId = `act_${accountId}`;
+
+  const endpoint = `https://graph.facebook.com/${GRAPH_VERSION}/${accountId}/advideos`;
+  const isUrl = /^https?:\/\//i.test(filePathOrUrl);
+  let res: Response;
+
+  if (isUrl) {
+    // Facebook si video stáhne z veřejné URL – nejspolehlivější cesta (žádný binární upload).
+    const body = new URLSearchParams({ access_token: token, file_url: filePathOrUrl, name });
+    if (description) body.append('description', description);
+    res = await fetch(endpoint, { method: 'POST', body });
+  } else {
+    if (!fs.existsSync(filePathOrUrl)) throw new Error(`Soubor nenalezen: ${filePathOrUrl}`);
+    // Multipart upload binárního souboru přes vestavěný fetch/FormData/Blob (Node 18+).
+    const fd = new FormData();
+    fd.append('access_token', token);
+    fd.append('name', name);
+    if (description) fd.append('description', description);
+    fd.append('source', new Blob([fs.readFileSync(filePathOrUrl)]), name);
+    res = await fetch(endpoint, { method: 'POST', body: fd });
+  }
+
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) {
+    const e = data?.error;
+    throw new Error(e
+      ? `Facebook API Error (${e.code}): ${e.message}.${e.error_user_msg ? ' ' + e.error_user_msg : ''}`
+      : `Upload selhal (HTTP ${res.status}).`);
+  }
+  if (!data.id) throw new Error('Facebook nevrátil video_id.');
+  return data.id as string;
+};
+
 // --- Nahrání reklamního média (obrázek → image_hash, video → video_id) ---
+// file_path může být lokální cesta NEBO veřejná URL (u videa). URL je vždy bráno jako video.
 export const uploadAdMedia = async (filePath: string, description?: string) => {
   try {
     ensureSdk();
-    if (!filePath) throw new Error('Chybí cesta k souboru (file_path).');
-    if (!fs.existsSync(filePath)) throw new Error(`Soubor nenalezen: ${filePath}`);
+    if (!filePath) throw new Error('Chybí cesta k souboru nebo URL (file_path).');
 
-    const adAccount = getAdAccount();
-    const ext = path.extname(filePath).toLowerCase();
-    const fileName = path.basename(filePath);
+    const isUrl = /^https?:\/\//i.test(filePath);
+    const pathname = isUrl ? new URL(filePath).pathname : filePath;
+    const ext = path.extname(pathname).toLowerCase();
+    const fileName = path.basename(pathname) || 'video.mp4';
 
-    if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+    if (!isUrl && !fs.existsSync(filePath)) throw new Error(`Soubor nenalezen: ${filePath}`);
+
+    // OBRÁZEK (jen lokální soubor)
+    if (!isUrl && ['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+      const adAccount = getAdAccount();
       const buffer = fs.readFileSync(filePath);
       const image: any = await adAccount.createAdImage([], {
         bytes: buffer.toString('base64'),
@@ -54,18 +102,21 @@ export const uploadAdMedia = async (filePath: string, description?: string) => {
         message: `Obrázek "${fileName}" nahrán. image_hash: ${hash}` };
     }
 
-    if (['.mp4', '.mov', '.avi', '.wmv', '.m4v'].includes(ext)) {
-      const video: any = await adAccount.createAdVideo([], {
-        source: filePath,
-        name: fileName,
-        description: description || 'Uploaded video',
-      });
-      const id = video?.id ?? video?._data?.id;
-      return { success: true, type: 'video', videoId: id,
-        message: `Video "${fileName}" nahráno. video_id: ${id} (zpracování může chvíli trvat).` };
+    if (isUrl && ['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+      throw new Error('Obrázek přes URL zatím nepodporován – stáhni ho lokálně a nahraj jako soubor. URL je podporována jen pro video.');
     }
 
-    throw new Error(`Nepodporovaný typ souboru: ${ext}. Použij obrázek (jpg, png, gif) nebo video (mp4, mov, ...).`);
+    // VIDEO (lokální soubor přes multipart, nebo veřejná URL přes file_url)
+    if (isUrl || ['.mp4', '.mov', '.avi', '.wmv', '.m4v', '.webm'].includes(ext)) {
+      const videoId = await uploadAdVideoDirect(filePath, fileName, description);
+      return { success: true, type: 'video', videoId,
+        message: `Video nahráno na /advideos. video_id: ${videoId}. `
+          + `Pozor: před použitím v kreativě počkej, až se zpracuje `
+          + `(GET /${videoId}?fields=status → video_status: "ready"). `
+          + `V object_story_spec použij video_data { video_id, image_url (povinný náhled), call_to_action }.` };
+    }
+
+    throw new Error(`Nepodporovaný typ: ${ext || '(bez přípony)'}. Použij obrázek (jpg, png, gif) nebo video (mp4, mov, webm, ...), případně veřejnou URL videa.`);
   } catch (error) {
     return { success: false, message: formatError(error, 'Chyba při nahrávání média') };
   }

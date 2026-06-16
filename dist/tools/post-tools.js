@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.create_post = create_post;
+exports.create_video_post = create_video_post;
 const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
 const config_js_1 = require("../config.js");
 const auth_manager_js_1 = require("../auth-manager.js");
@@ -135,6 +136,77 @@ async function getPageInfo() {
     catch (error) {
         console.error('Chyba při získávání informací o stránce:', error);
         return null;
+    }
+}
+/**
+ * Nahraje VIDEO jako organický příspěvek na Facebook stránku přes resumable upload
+ * na /{page-id}/videos s page tokenem. Výchozí published=false → video se nahraje jako
+ * NEPUBLIKOVANÉ (k ruční kontrole a publikaci ve Business Suite / na stránce).
+ */
+async function create_video_post(filePath, content, published = false) {
+    if (!filePath)
+        throw new Error('Chybí cesta k video souboru (file_path).');
+    if (!fs_1.default.existsSync(filePath))
+        throw new Error(`Soubor nenalezen: ${filePath}`);
+    const pageInfo = await getPageInfo();
+    if (!pageInfo)
+        throw new Error('Nebyla nalezena žádná Facebook stránka nebo chybí oprávnění.');
+    const { id: pageId, access_token: pageToken } = pageInfo;
+    const endpoint = `https://graph.facebook.com/v25.0/${pageId}/videos`;
+    const fileName = filePath.split('/').pop() || 'video.mp4';
+    const fileSize = fs_1.default.statSync(filePath).size;
+    try {
+        // 1) start – ohlásím velikost, dostanu session a offsety
+        const startResp = await axios_1.default.post(endpoint, new URLSearchParams({ upload_phase: 'start', file_size: String(fileSize), access_token: pageToken }));
+        const sessionId = startResp.data.upload_session_id;
+        const videoId = startResp.data.video_id;
+        let startOffset = Number(startResp.data.start_offset);
+        let endOffset = Number(startResp.data.end_offset);
+        // 2) transfer – chunky přesně dle offsetů od Facebooku
+        const fd = fs_1.default.openSync(filePath, 'r');
+        try {
+            let guard = 0;
+            while (startOffset < endOffset && guard < 100000) {
+                guard++;
+                const len = endOffset - startOffset;
+                const chunk = Buffer.alloc(len);
+                fs_1.default.readSync(fd, chunk, 0, len, startOffset);
+                const form = new form_data_1.default();
+                form.append('access_token', pageToken);
+                form.append('upload_phase', 'transfer');
+                form.append('upload_session_id', sessionId);
+                form.append('start_offset', String(startOffset));
+                form.append('video_file_chunk', chunk, { filename: fileName, contentType: 'application/octet-stream' });
+                const tResp = await axios_1.default.post(endpoint, form, {
+                    headers: form.getHeaders(),
+                    maxBodyLength: Infinity,
+                    maxContentLength: Infinity,
+                });
+                startOffset = Number(tResp.data.start_offset);
+                endOffset = Number(tResp.data.end_offset);
+            }
+        }
+        finally {
+            fs_1.default.closeSync(fd);
+        }
+        // 3) finish – předám popis a publikační stav
+        const finishParams = new URLSearchParams({
+            upload_phase: 'finish',
+            upload_session_id: sessionId,
+            access_token: pageToken,
+            description: content || '',
+            published: published ? 'true' : 'false',
+        });
+        const finResp = await axios_1.default.post(endpoint, finishParams);
+        if (finResp.data && finResp.data.success === false) {
+            throw new Error(`Finish fáze selhala: ${JSON.stringify(finResp.data)}`);
+        }
+        return { videoId, published };
+    }
+    catch (error) {
+        const fb = error?.response?.data?.error;
+        const msg = fb ? `Facebook API Error (${fb.code}): ${fb.message}` : (error?.message || 'Neznámá chyba');
+        throw new Error(`Chyba při nahrávání videa na stránku: ${msg}`);
     }
 }
 //# sourceMappingURL=post-tools.js.map

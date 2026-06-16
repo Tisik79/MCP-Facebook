@@ -8,7 +8,7 @@ export declare const uploadAdMedia: (filePath: string, description?: string) => 
 } | {
     success: boolean;
     type: string;
-    videoId: any;
+    videoId: string;
     message: string;
     imageHash?: undefined;
     id?: undefined;

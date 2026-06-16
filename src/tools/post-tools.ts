@@ -158,3 +158,83 @@ async function getPageInfo(): Promise<{ id: string, access_token: string } | nul
     return null;
   }
 }
+
+/**
+ * Nahraje VIDEO jako organický příspěvek na Facebook stránku přes resumable upload
+ * na /{page-id}/videos s page tokenem. Výchozí published=false → video se nahraje jako
+ * NEPUBLIKOVANÉ (k ruční kontrole a publikaci ve Business Suite / na stránce).
+ */
+export async function create_video_post(
+  filePath: string,
+  content: string,
+  published: boolean = false
+): Promise<{ videoId: string; published: boolean }> {
+  if (!filePath) throw new Error('Chybí cesta k video souboru (file_path).');
+  if (!fs.existsSync(filePath)) throw new Error(`Soubor nenalezen: ${filePath}`);
+
+  const pageInfo = await getPageInfo();
+  if (!pageInfo) throw new Error('Nebyla nalezena žádná Facebook stránka nebo chybí oprávnění.');
+  const { id: pageId, access_token: pageToken } = pageInfo;
+
+  const endpoint = `https://graph.facebook.com/v25.0/${pageId}/videos`;
+  const fileName = filePath.split('/').pop() || 'video.mp4';
+  const fileSize = fs.statSync(filePath).size;
+
+  try {
+    // 1) start – ohlásím velikost, dostanu session a offsety
+    const startResp = await axios.post(
+      endpoint,
+      new URLSearchParams({ upload_phase: 'start', file_size: String(fileSize), access_token: pageToken })
+    );
+    const sessionId: string = startResp.data.upload_session_id;
+    const videoId: string = startResp.data.video_id;
+    let startOffset = Number(startResp.data.start_offset);
+    let endOffset = Number(startResp.data.end_offset);
+
+    // 2) transfer – chunky přesně dle offsetů od Facebooku
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      let guard = 0;
+      while (startOffset < endOffset && guard < 100000) {
+        guard++;
+        const len = endOffset - startOffset;
+        const chunk = Buffer.alloc(len);
+        fs.readSync(fd, chunk, 0, len, startOffset);
+        const form = new FormData();
+        form.append('access_token', pageToken);
+        form.append('upload_phase', 'transfer');
+        form.append('upload_session_id', sessionId);
+        form.append('start_offset', String(startOffset));
+        form.append('video_file_chunk', chunk, { filename: fileName, contentType: 'application/octet-stream' });
+        const tResp = await axios.post(endpoint, form, {
+          headers: form.getHeaders(),
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        });
+        startOffset = Number(tResp.data.start_offset);
+        endOffset = Number(tResp.data.end_offset);
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    // 3) finish – předám popis a publikační stav
+    const finishParams = new URLSearchParams({
+      upload_phase: 'finish',
+      upload_session_id: sessionId,
+      access_token: pageToken,
+      description: content || '',
+      published: published ? 'true' : 'false',
+    });
+    const finResp = await axios.post(endpoint, finishParams);
+    if (finResp.data && finResp.data.success === false) {
+      throw new Error(`Finish fáze selhala: ${JSON.stringify(finResp.data)}`);
+    }
+
+    return { videoId, published };
+  } catch (error: any) {
+    const fb = error?.response?.data?.error;
+    const msg = fb ? `Facebook API Error (${fb.code}): ${fb.message}` : (error?.message || 'Neznámá chyba');
+    throw new Error(`Chyba při nahrávání videa na stránku: ${msg}`);
+  }
+}

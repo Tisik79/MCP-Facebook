@@ -2,6 +2,7 @@ import { AdAccount, Ad } from 'facebook-nodejs-business-sdk';
 import fs from 'fs';
 import path from 'path';
 import { config, initFacebookSdk, getActiveToken, getActiveAccountId } from '../config.js';
+import { formatFbError } from './fb-error.js';
 
 // Graph API verze pro přímá HTTP volání (lze přepsat přes env, ať drží krok se SDK)
 const GRAPH_VERSION = process.env.FB_GRAPH_API_VERSION || 'v23.0';
@@ -21,18 +22,8 @@ const ensureSdk = () => {
   }
 };
 
-// Helper: čitelná chybová hláška z Facebook API
-const formatError = (error: unknown, prefix: string): string => {
-  let msg = `${prefix}: ${error instanceof Error ? error.message : 'Neznámá chyba'}`;
-  if (error && typeof error === 'object' && 'response' in error) {
-    const fb = (error as any).response?.data?.error;
-    if (fb) {
-      msg = `Facebook API Error (${fb.code}): ${fb.message}.`
-        + `${fb.error_user_title ? ` (${fb.error_user_title})` : ''} ${fb.error_user_msg || ''}`;
-    }
-  }
-  return msg;
-};
+// Helper: čitelná chybová hláška z Facebook API (sdílený formatter s plnou diagnostikou)
+const formatError = (error: unknown, prefix: string): string => formatFbError(error, prefix);
 
 // --- Přímý upload videa na /advideos (obchází nespolehlivý createAdVideo v SDK) ---
 // Podporuje lokální soubor (multipart) i veřejnou URL (file_url – FB si video stáhne sám).

@@ -22,6 +22,7 @@ import * as analyticsTools from './tools/analytics-tools.js';
 import * as adSetTools from './tools/adset-tools.js'; // Import new adset tools
 import * as postTools from './tools/post-tools.js'; // Import post tools
 import * as adTools from './tools/ad-tools.js'; // Import ad/creative/media tools
+import * as leadFormTools from './tools/leadform-tools.js'; // Import lead form / pixel tools
 
 // Návod, jak získat přístup k Facebooku. Plná verze: docs/FACEBOOK_APP_SETUP.md
 const FB_APP_SETUP_GUIDE = [
@@ -90,10 +91,11 @@ const initializeServer = async (): Promise<McpServer> => {
       startTime: z.string().optional().describe('Čas začátku kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
       endTime: z.string().optional().describe('Čas konce kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
       // Made special_ad_categories required and non-empty
-      special_ad_categories: z.array(z.string()).nonempty().describe('Speciální kategorie reklam (POVINNÉ, MUSÍ obsahovat alespoň jednu platnou hodnotu, např. ["HOUSING"], ["EMPLOYMENT"], ["CREDIT"], ["ISSUES_ELECTIONS_POLITICS"])')
+      special_ad_categories: z.array(z.string()).nonempty().describe('Speciální kategorie reklam (POVINNÉ, MUSÍ obsahovat alespoň jednu platnou hodnotu, např. ["HOUSING"], ["EMPLOYMENT"], ["CREDIT"], ["ISSUES_ELECTIONS_POLITICS"])'),
+      bidStrategy: z.enum(['LOWEST_COST_WITHOUT_CAP', 'LOWEST_COST_WITH_BID_CAP', 'COST_CAP']).optional().describe('Strategie nabídek kampaně (jen u CBO – s rozpočtem na kampani). Default LOWEST_COST_WITHOUT_CAP = bez capu (ad set pak nepotřebuje bidAmount). LOWEST_COST_WITH_BID_CAP / COST_CAP vyžadují bidAmount na ad setu.')
     },
     // Destructure arguments directly in the handler signature
-    async ({ name, objective, status, dailyBudget, startTime, endTime, special_ad_categories }) => {
+    async ({ name, objective, status, dailyBudget, startTime, endTime, special_ad_categories, bidStrategy }) => {
       const result = await campaignTools.createCampaign(
         name,
         objective,
@@ -101,7 +103,8 @@ const initializeServer = async (): Promise<McpServer> => {
         dailyBudget ? parseFloat(dailyBudget) : undefined,
         startTime,
         endTime,
-        special_ad_categories // Pass the new parameter
+        special_ad_categories, // Pass the new parameter
+        bidStrategy // Bid strategie kampaně (default WITHOUT_CAP u CBO)
       );
       // Adjust the response text to include details from result.campaignData
       let campaignResponseText = result.success
@@ -114,6 +117,7 @@ const initializeServer = async (): Promise<McpServer> => {
                                   `  - Cíl: ${result.campaignData.objective}\n` +
                                   `  - Status: ${result.campaignData.status}\n` +
                                   (result.campaignData.dailyBudget ? `  - Denní rozpočet: ${result.campaignData.dailyBudget}\n` : '') +
+                                  (result.campaignData.bidStrategy ? `  - Bid strategy: ${result.campaignData.bidStrategy}\n` : '') +
                                   (result.campaignData.createdTime ? `  - Vytvořeno: ${new Date(result.campaignData.createdTime).toLocaleString()}\n` : '');
       }
       return {
@@ -168,6 +172,7 @@ const initializeServer = async (): Promise<McpServer> => {
       responseText += `  - Cíl: ${campaign.objective || 'N/A'}\n`;
       responseText += `  - Status: ${campaign.status || 'N/A'}\n`;
       responseText += `  - Typ nákupu: ${campaign.buyingType || 'N/A'}\n`;
+      responseText += `  - Bid strategy: ${campaign.bidStrategy || 'N/A'}\n`;
       responseText += `\n- **Rozpočet a finance:**\n`;
       responseText += campaign.dailyBudget ? `  - Denní rozpočet: ${campaign.dailyBudget}\n` : '';
       responseText += campaign.lifetimeBudget ? `  - Celoživotní rozpočet: ${campaign.lifetimeBudget}\n` : '';
@@ -197,20 +202,22 @@ const initializeServer = async (): Promise<McpServer> => {
         name: z.string().optional().describe('Nový název kampaně'),
         status: z.string().optional().describe('Nový status kampaně (ACTIVE, PAUSED)'),
         dailyBudget: z.string().optional().describe('Nový denní rozpočet v měně účtu (např. "1500.00")'),
-        endTime: z.string().optional().describe('Nový čas konce kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)')
+        endTime: z.string().optional().describe('Nový čas konce kampaně ve formátu ISO (YYYY-MM-DDTHH:MM:SS+0000)'),
+        bidStrategy: z.enum(['LOWEST_COST_WITHOUT_CAP', 'LOWEST_COST_WITH_BID_CAP', 'COST_CAP']).optional().describe('Strategie nabídek kampaně. LOWEST_COST_WITHOUT_CAP = bez capu (ad set pak nepotřebuje bidAmount). LOWEST_COST_WITH_BID_CAP / COST_CAP vyžadují bidAmount na ad setu.')
      },
-    async ({ campaignId, name, status, dailyBudget, endTime }) => { // Destructure arguments
+    async ({ campaignId, name, status, dailyBudget, endTime, bidStrategy }) => { // Destructure arguments
        // Check if at least one updateable field is provided
-       if (!name && !status && !dailyBudget && !endTime) {
+       if (!name && !status && !dailyBudget && !endTime && !bidStrategy) {
            // Throw standard Error or handle appropriately, McpError might not be available
-           throw new Error('Musí být poskytnut alespoň jeden parametr k aktualizaci (name, status, dailyBudget, endTime).');
+           throw new Error('Musí být poskytnut alespoň jeden parametr k aktualizaci (name, status, dailyBudget, endTime, bidStrategy).');
        }
       const result = await campaignTools.updateCampaign(
         campaignId,
         name,
         status,
         dailyBudget ? parseFloat(dailyBudget) : undefined,
-        endTime
+        endTime,
+        bidStrategy
       );
       return {
          // Removed leading emojis
@@ -577,18 +584,54 @@ const initializeServer = async (): Promise<McpServer> => {
           optimizationGoal: z.string().describe('Cíl optimalizace (např. REACH, OFFSITE_CONVERSIONS)'),
           billingEvent: z.string().describe('Událost pro účtování (např. IMPRESSIONS, LINK_CLICKS)'),
           bidAmount: z.number().int().positive().optional().describe('Nabídka v centech (volitelné)'),
-          dailyBudget: z.number().int().positive().optional().describe('Denní rozpočet v centech (volitelné)'),
-          lifetimeBudget: z.number().int().positive().optional().describe('Celoživotní rozpočet v centech (volitelné)'),
+          dailyBudget: z.number().int().positive().optional().describe('Denní rozpočet v centech (volitelné). U CBO účtů (rozpočet na úrovni kampaně) NEUVÁDĚT – dědí se z kampaně.'),
+          lifetimeBudget: z.number().int().positive().optional().describe('Celoživotní rozpočet v centech (volitelné). U CBO účtů NEUVÁDĚT.'),
           startTime: z.string().datetime({ offset: true }).optional().describe('Čas začátku (ISO 8601, volitelné)'),
-          endTime: z.string().datetime({ offset: true }).optional().describe('Čas konce (ISO 8601, volitelné)')
+          endTime: z.string().datetime({ offset: true }).optional().describe('Čas konce (ISO 8601, volitelné)'),
+          promotedObject: z.any().optional().describe('Lead kampaně (OUTCOME_LEADS) → API promoted_object. Web konverze: { pixel_id, custom_event_type:"LEAD" } nebo { pixel_id, custom_conversion_id }. Instant formulář: { page_id }.'),
+          destinationType: z.enum(['WEBSITE', 'ON_AD', 'MESSENGER', 'PHONE_CALL', 'INSTAGRAM_DIRECT']).optional().describe('Lead kampaně → API destination_type. Web konverze: WEBSITE. Instant formulář: ON_AD.'),
+          dsaBeneficiary: z.string().optional().describe('EU DSA: jméno osoby/organizace, kterou reklama propaguje (kdo z ní těží). POVINNÉ u cílení na EU – jinak chyba 100/3858081. Zobrazuje se veřejně v Knihovně reklam.'),
+          dsaPayor: z.string().optional().describe('EU DSA: kdo reklamu platí. Volitelné – když se neuvede, použije se stejná hodnota jako dsaBeneficiary.')
       },
       async (params) => {
-          // Basic validation for budget (either daily or lifetime must be set)
-          if (!params.dailyBudget && !params.lifetimeBudget) {
-              throw new Error('Musí být nastaven alespoň denní nebo celoživotní rozpočet.');
-          }
+          // Některé klienty posílají objektové parametry jako JSON string – zparsuj je,
+          // ať vnořená validace (promotedObject.pixel_id) i propsání do API fungují.
+          const parseIfString = (v: any, label: string) => {
+              if (typeof v !== 'string') return v;
+              try { return JSON.parse(v); }
+              catch { throw new Error(`Parametr ${label} přišel jako neplatný JSON string: ${v}`); }
+          };
+          params.promotedObject = parseIfString(params.promotedObject, 'promotedObject');
+          params.targeting = parseIfString(params.targeting, 'targeting');
+
+          // Rozpočet: nesmí být oba zároveň. Žádný rozpočet je OK (CBO – dědí z kampaně).
           if (params.dailyBudget && params.lifetimeBudget) {
               throw new Error('Nelze nastavit současně denní i celoživotní rozpočet.');
+          }
+
+          // Doporučená validace pro lead kampaně, ať to nepadá obecným „Invalid parameter".
+          const og = params.optimizationGoal;
+          const po: any = params.promotedObject;
+          if (og === 'OFFSITE_CONVERSIONS') {
+              if (!po?.pixel_id) {
+                  throw new Error('Pro optimization_goal=OFFSITE_CONVERSIONS je vyžadováno promotedObject.pixel_id (+ custom_event_type nebo custom_conversion_id).');
+              }
+              if (!po.custom_event_type && !po.custom_conversion_id) {
+                  throw new Error('promotedObject u OFFSITE_CONVERSIONS vyžaduje custom_event_type (např. "LEAD") nebo custom_conversion_id.');
+              }
+              if (params.destinationType && params.destinationType !== 'WEBSITE') {
+                  throw new Error('Pro OFFSITE_CONVERSIONS (web konverze) musí být destinationType=WEBSITE.');
+              }
+              if (!params.destinationType) params.destinationType = 'WEBSITE';
+          }
+          if (og === 'LEAD_GENERATION' || og === 'QUALITY_LEAD') {
+              if (!po?.page_id) {
+                  throw new Error(`Pro optimization_goal=${og} (instant formulář) je vyžadováno promotedObject.page_id.`);
+              }
+              if (params.destinationType && params.destinationType !== 'ON_AD') {
+                  throw new Error(`Pro ${og} (instant formulář) musí být destinationType=ON_AD.`);
+              }
+              if (!params.destinationType) params.destinationType = 'ON_AD';
           }
 
           const result = await adSetTools.createAdSet(
@@ -602,18 +645,24 @@ const initializeServer = async (): Promise<McpServer> => {
               params.dailyBudget,
               params.lifetimeBudget,
               params.startTime,
-              params.endTime
+              params.endTime,
+              params.promotedObject,
+              params.destinationType,
+              params.dsaBeneficiary,
+              params.dsaPayor
           );
           // Adjust the response text to potentially include more details from result.adSetData
           let responseText = result.success
               ? `Reklamní sada "${params.name}" byla úspěšně vytvořena (ID: ${result.adSetId}).\n\n`
-              : `Chyba při vytváření reklamní sady: ${result.message}`;
+              : result.message;
 
           if (result.success && result.adSetData) {
               responseText += `Detaily:\n` +
                               `  - Status: ${result.adSetData.status}\n` +
                               `  - Optimalizace: ${result.adSetData.optimizationGoal}\n` +
                               `  - Účtování: ${result.adSetData.billingEvent}\n` +
+                              (result.adSetData.destinationType ? `  - Cíl (destination_type): ${result.adSetData.destinationType}\n` : '') +
+                              (result.adSetData.promotedObject ? `  - Promoted object: ${JSON.stringify(result.adSetData.promotedObject)}\n` : '') +
                               (result.adSetData.dailyBudget ? `  - Denní rozpočet: ${result.adSetData.dailyBudget}\n` : '') +
                               (result.adSetData.lifetimeBudget ? `  - Celoživotní rozpočet: ${result.adSetData.lifetimeBudget}\n` : '') +
                               (result.adSetData.startTime ? `  - Začátek: ${new Date(result.adSetData.startTime).toLocaleString()}\n` : '') +
@@ -625,6 +674,23 @@ const initializeServer = async (): Promise<McpServer> => {
           };
       }
   );
+
+  server.tool(
+      'update_adset',
+      {
+          adSetId: z.string().describe('ID reklamní sady (ad set)'),
+          name: z.string().optional().describe('Nový název'),
+          status: z.enum(['ACTIVE', 'PAUSED', 'ARCHIVED']).optional().describe('Nový status (ACTIVE = spustit, PAUSED = pozastavit, ARCHIVED = archivovat)')
+      },
+      async ({ adSetId, name, status }) => {
+          if (!name && !status) {
+              throw new Error('Musí být zadán alespoň jeden parametr k úpravě (name nebo status).');
+          }
+          const r = await adSetTools.updateAdSet(adSetId, { name, status });
+          return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+      }
+  );
+
   // --- Registrace nástrojů pro reklamy (Ads), kreativy a média ---
   server.tool(
       'upload_ad_media',
@@ -645,7 +711,10 @@ const initializeServer = async (): Promise<McpServer> => {
       'create_adcreative',
       {
           name: z.string().describe('Název kreativy'),
-          object_story_spec: z.any().describe('Specifikace kreativy: page_id + link_data/video_data s image_hash/video_id (viz FB dokumentace)')
+          object_story_spec: z.any().describe('Specifikace kreativy: page_id + link_data/video_data s image_hash/video_id. '
+              + 'Instant formulář (Cesta B): video_data/link_data s call_to_action { type:"SIGN_UP", value:{ lead_gen_form_id:"<FORM_ID>" } }. '
+              + 'Web konverze (Cesta A): call_to_action { type:"LEARN_MORE", value:{ link:"https://www.svobodne-reality.cz" } } '
+              + '(+ u video_data doplň link_description; u čistě video příspěvku je CTA s link nutné pro proklik na web).')
       },
       async ({ name, object_story_spec }) => {
           const r = await adTools.createAdCreative(name, object_story_spec);
@@ -692,7 +761,81 @@ const initializeServer = async (): Promise<McpServer> => {
       }
   );
 
+  // --- Registrace nástrojů pro lead formuláře (instant formuláře) a pixely ---
+  server.tool(
+      'create_lead_form',
+      {
+          name: z.string().describe('Název lead formuláře'),
+          privacy_policy: z.object({
+              url: z.string().describe('URL zásad ochrany osobních údajů (povinné – Meta vyžaduje)'),
+              link_text: z.string().describe('Text odkazu na zásady (např. "Zásady ochrany osobních údajů")')
+          }).describe('Odkaz na zásady ochrany osobních údajů – Meta vyžaduje URL.'),
+          page_id: z.string().optional().describe('ID stránky (volitelné – výchozí je aktivní připojená stránka)'),
+          locale: z.string().optional().describe('Jazyk formuláře (výchozí CS_CZ)'),
+          questions: z.array(z.any()).optional().describe('Pole otázek, např. [{"type":"FULL_NAME"},{"type":"EMAIL"},{"type":"PHONE"}]. Vlastní: {"type":"CUSTOM","label":"Typ nemovitosti","options":[...]}. Výchozí: jméno+email+telefon.'),
+          context_card: z.any().optional().describe('Úvodní karta (nadpis + popis + tlačítko) – volitelné'),
+          thank_you_page: z.any().optional().describe('Děkovací stránka (text + odkaz na web) – volitelné'),
+          follow_up_action_url: z.string().optional().describe('URL webu pro navazující akci – volitelné')
+      },
+      async (p) => {
+          const r = await leadFormTools.createLeadForm({
+              name: p.name,
+              privacyPolicy: p.privacy_policy,
+              pageId: p.page_id,
+              locale: p.locale,
+              questions: p.questions,
+              contextCard: p.context_card,
+              thankYouPage: p.thank_you_page,
+              followUpActionUrl: p.follow_up_action_url,
+          });
+          return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+      }
+  );
+
+  server.tool(
+      'get_lead_forms',
+      {
+          page_id: z.string().optional().describe('ID stránky (volitelné – výchozí je aktivní připojená stránka)')
+      },
+      async ({ page_id }) => {
+          const r = await leadFormTools.getLeadForms(page_id);
+          if (!r.success) return { content: [{ type: 'text', text: `Chyba: ${r.message}` }] };
+          const list = (r.forms || []).map((f: any) => `  - ${f.name} (ID: ${f.id}, status: ${f.status}, leadů: ${f.leads_count})`).join('\n');
+          return { content: [{ type: 'text', text: `${r.message}\n${list}` }] };
+      }
+  );
+
+  server.tool(
+      'get_pixels',
+      {},
+      async () => {
+          const r = await leadFormTools.getPixels();
+          if (!r.success) return { content: [{ type: 'text', text: `Chyba: ${r.message}` }] };
+          const list = (r.pixels || []).map((px: any) => `  - ${px.name} (Pixel ID: ${px.id})`).join('\n');
+          return { content: [{ type: 'text', text: `${r.message}\n${list}` }] };
+      }
+  );
+
   // --- Registrace nástrojů pro správu příspěvků ---
+  server.tool(
+      'create_video_post',
+      {
+          file_path: z.string().describe('Absolutní cesta k video souboru (mp4/mov)'),
+          message: z.string().describe('Text příspěvku (popis videa na stránce)'),
+          published: z.boolean().optional().describe('Publikovat ihned? Výchozí false = nahraje jako NEPUBLIKOVANÉ ke kontrole a ruční publikaci.')
+      },
+      async ({ file_path, message, published }) => {
+          try {
+              const r = await postTools.create_video_post(file_path, message, published ?? false);
+              const stav = r.published
+                  ? 'PUBLIKOVÁNO na stránce'
+                  : 'NEPUBLIKOVÁNO – zkontroluj a publikuj ve Business Suite / na stránce';
+              return { content: [{ type: 'text', text: `Video nahráno na stránku. video_id: ${r.videoId}, stav: ${stav}` }] };
+          } catch (e: any) {
+              return { content: [{ type: 'text', text: `Chyba: ${e?.message || 'neznámá chyba'}` }] };
+          }
+      }
+  );
   server.tool(
       'create_post',
       {

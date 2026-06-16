@@ -1,8 +1,11 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import { FacebookAdsApi, AdAccount } from 'facebook-nodejs-business-sdk';
 import { loadTokens, getToken, getAdAccountId, getAppCredentials } from './auth-manager.js';
 
-dotenv.config();
+// Cowork spouští server s cwd=/, takže výchozí dotenv.config() (čte ./.env) nikdy nenajde
+// náš .env. Načteme ho absolutní cestou odvozenou od umístění modulu: dist/config.js → ../.env.
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Vrátí aktuální access token: nejprve z uloženého OAuth přihlášení (tokens.json),
 // jako fallback z env proměnné. Nikdy nevyhazuje výjimku (vrací prázdný řetězec).
@@ -19,6 +22,11 @@ export const config = {
   get facebookAppSecret(): string { return getAppCredentials().appSecret; },
   get facebookAccessToken(): string | undefined { return resolveToken() || undefined; },
   get facebookAccountId(): string | undefined { return getAdAccountId() || undefined; },
+  // EU DSA transparentnost – výchozí inzerent pro ad sety cílené na EU. Čte se z .env
+  // (FB_DSA_BENEFICIARY / FB_DSA_PAYOR), takže hodnota projde i bez nového tool-paramu,
+  // dokud Cowork neobnoví zamrzlé schéma nástrojů. Explicitní param na ad setu má přednost.
+  get dsaBeneficiary(): string | undefined { return process.env.FB_DSA_BENEFICIARY || undefined; },
+  get dsaPayor(): string | undefined { return process.env.FB_DSA_PAYOR || undefined; },
   port: 3000,
 };
 

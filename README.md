@@ -95,12 +95,31 @@ node dist/index.js login
 | `update_campaign` | Úprava kampaně |
 | `get_campaign_insights` | Analytika kampaně |
 | `get_adsets` | Seznam Ad Sets |
-| `create_ad_set` | Vytvoření Ad Set |
+| `create_ad_set` | Vytvoření Ad Set (vč. lead polí `promotedObject` / `destinationType`) |
+| `update_adset` | Úprava Ad Set (název / status) — reálný zápis + read-after-write |
 | `get_ads` | Seznam reklam |
+| `create_lead_form` | Vytvoření instant lead formuláře na stránce |
+| `get_lead_forms` | Seznam lead formulářů (`id`, `name`, `status`, `leads_count`) |
+| `get_pixels` | Pixely účtu (`id`, `name`) pro `promoted_object` |
 | `get_audiences` | Vlastní publika |
 | `create_custom_audience` | Vytvoření publika |
 | `create_lookalike_audience` | Lookalike publikum |
 | `create_post` | Příspěvek na stránku |
+
+## Lead kampaně (OUTCOME_LEADS)
+
+Sběr leadů má dvě cesty; obě potřebují na ad setu `promotedObject` + `destinationType`:
+
+- **Webové konverze** — `optimizationGoal=OFFSITE_CONVERSIONS`, `destinationType=WEBSITE`,
+  `promotedObject={ pixel_id, custom_event_type: "LEAD" }` (Pixel ID zjistíš přes `get_pixels`).
+- **Instant formulář** — `optimizationGoal=LEAD_GENERATION`, `destinationType=ON_AD`,
+  `promotedObject={ page_id }`, kreativa s `call_to_action.value.lead_gen_form_id`
+  (formulář založíš přes `create_lead_form`).
+
+Bez `promotedObject` + `destinationType` vrací Meta „Invalid parameter". U účtů s rozpočtem
+na úrovni kampaně (CBO) se **na ad setu rozpočet neuvádí** — dědí se z kampaně. Pokud kampaň
+používá cap strategii (`LOWEST_COST_WITH_BID_CAP`), ad set vyžaduje `bidAmount`; jinak nastav
+kampani `bidStrategy=LOWEST_COST_WITHOUT_CAP`.
 
 ## Licence
 

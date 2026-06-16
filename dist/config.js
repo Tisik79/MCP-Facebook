@@ -5,9 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAdAccount = exports.getActiveAccountId = exports.getActiveToken = exports.initFacebookSdk = exports.validateConfig = exports.config = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
 const auth_manager_js_1 = require("./auth-manager.js");
-dotenv_1.default.config();
+// Cowork spouští server s cwd=/, takže výchozí dotenv.config() (čte ./.env) nikdy nenajde
+// náš .env. Načteme ho absolutní cestou odvozenou od umístění modulu: dist/config.js → ../.env.
+dotenv_1.default.config({ path: path_1.default.join(__dirname, '..', '.env') });
 // Vrátí aktuální access token: nejprve z uloženého OAuth přihlášení (tokens.json),
 // jako fallback z env proměnné. Nikdy nevyhazuje výjimku (vrací prázdný řetězec).
 function resolveToken(pageId) {
@@ -26,6 +29,11 @@ exports.config = {
     get facebookAppSecret() { return (0, auth_manager_js_1.getAppCredentials)().appSecret; },
     get facebookAccessToken() { return resolveToken() || undefined; },
     get facebookAccountId() { return (0, auth_manager_js_1.getAdAccountId)() || undefined; },
+    // EU DSA transparentnost – výchozí inzerent pro ad sety cílené na EU. Čte se z .env
+    // (FB_DSA_BENEFICIARY / FB_DSA_PAYOR), takže hodnota projde i bez nového tool-paramu,
+    // dokud Cowork neobnoví zamrzlé schéma nástrojů. Explicitní param na ad setu má přednost.
+    get dsaBeneficiary() { return process.env.FB_DSA_BENEFICIARY || undefined; },
+    get dsaPayor() { return process.env.FB_DSA_PAYOR || undefined; },
     port: 3000,
 };
 // Server smí nastartovat i bez tokenu – jen API operace zatím nepůjdou,

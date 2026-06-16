@@ -1,4 +1,5 @@
-export declare const createCampaign: (name: string, objective: string, status: string, dailyBudget?: number, startTime?: string, endTime?: string, special_ad_categories?: string[]) => Promise<{
+export declare const createCampaign: (name: string, objective: string, status: string, dailyBudget?: number, startTime?: string, endTime?: string, special_ad_categories?: string[], // Added new optional parameter
+bidStrategy?: string) => Promise<{
     success: boolean;
     campaignId: string;
     campaignData: {
@@ -8,6 +9,7 @@ export declare const createCampaign: (name: string, objective: string, status: s
         status: any;
         createdTime: any;
         dailyBudget: number | null;
+        bidStrategy: any;
     };
     message: string;
 } | {
@@ -32,8 +34,13 @@ export declare const getCampaigns: (limit?: number, status?: string) => Promise<
     message: string;
     campaigns?: undefined;
 }>;
-export declare const updateCampaign: (campaignId: string, name?: string, status?: string, dailyBudget?: number, endTime?: string) => Promise<{
+export declare const updateCampaign: (campaignId: string, name?: string, status?: string, dailyBudget?: number, endTime?: string, bidStrategy?: string) => Promise<{
     success: boolean;
+    message: string;
+    campaign?: undefined;
+} | {
+    success: boolean;
+    campaign: any;
     message: string;
 }>;
 export declare const getCampaignDetails: (campaignId: string) => Promise<{
@@ -52,6 +59,7 @@ export declare const getCampaignDetails: (campaignId: string) => Promise<{
         budgetRemaining: number | null;
         buyingType: any;
         specialAdCategories: any;
+        bidStrategy: any;
     };
     message?: undefined;
 } | {

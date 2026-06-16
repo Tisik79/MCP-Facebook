@@ -4,6 +4,8 @@ export declare const config: {
     readonly facebookAppSecret: string;
     readonly facebookAccessToken: string | undefined;
     readonly facebookAccountId: string | undefined;
+    readonly dsaBeneficiary: string | undefined;
+    readonly dsaPayor: string | undefined;
     port: number;
 };
 export declare const validateConfig: () => boolean;

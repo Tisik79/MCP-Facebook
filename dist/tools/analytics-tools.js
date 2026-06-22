@@ -11,6 +11,22 @@ const getAdAccount = () => {
     }
     return new facebook_nodejs_business_sdk_1.AdAccount(config_js_1.config.facebookAccountId);
 };
+// Některé metriky Meta vrací jako pole akcí [{action_type, value}, ...] (typicky video metriky:
+// video_thruplay_watched_actions, video_avg_time_watched_actions, actions, ...). Bez rozbalení
+// se v textu vypíšou jako [object Object]. Tahle funkce vrátí čitelnou hodnotu: u jedné akce
+// rovnou číslo, u více akcí součet + rozpad podle action_type.
+const serializeInsightValue = (value) => {
+    if (!Array.isArray(value))
+        return value;
+    const entries = value.filter((x) => x && x.value !== undefined);
+    if (entries.length === 0)
+        return value;
+    const total = entries.reduce((s, x) => s + (parseFloat(x.value) || 0), 0);
+    if (entries.length === 1)
+        return total;
+    const breakdown = entries.map((x) => `${x.action_type}=${x.value}`).join(', ');
+    return `${total} (${breakdown})`;
+};
 // Získání insights (analytických dat) pro kampaň
 const getCampaignInsights = async (campaignId, timeRange = { since: '2023-01-01', until: '2023-12-31' }, metrics = ['impressions', 'clicks', 'spend', 'cpc', 'ctr', 'reach', 'frequency']) => {
     try {
@@ -45,7 +61,7 @@ const getCampaignInsights = async (campaignId, timeRange = { since: '2023-01-01'
                         result[metric] = parseFloat(insight[metric] || '0');
                     }
                     else {
-                        result[metric] = insight[metric];
+                        result[metric] = serializeInsightValue(insight[metric]);
                     }
                 }
             });
@@ -104,7 +120,7 @@ const getAccountInsights = async (timeRange = { since: '2023-01-01', until: '202
                         result[metric] = parseFloat(insight[metric] || '0');
                     }
                     else {
-                        result[metric] = insight[metric];
+                        result[metric] = serializeInsightValue(insight[metric]);
                     }
                 }
             });
@@ -285,7 +301,7 @@ const getAdSetInsights = async (adSetId, timeRange = { since: '2023-01-01', unti
                         result[metric] = parseFloat(insight[metric] || '0');
                     }
                     else {
-                        result[metric] = insight[metric];
+                        result[metric] = serializeInsightValue(insight[metric]);
                     }
                 }
             });
@@ -336,7 +352,7 @@ const getAdInsights = async (adId, timeRange = { since: '2023-01-01', until: '20
                         result[metric] = parseFloat(insight[metric] || '0');
                     }
                     else {
-                        result[metric] = insight[metric];
+                        result[metric] = serializeInsightValue(insight[metric]);
                     }
                 }
             });
@@ -402,24 +418,21 @@ exports.getAdSets = getAdSets;
 // Získání seznamu reklam (Ads) pro Ad Set nebo kampaň
 const getAds = async (adSetId, campaignId, limit = 25, status) => {
     try {
-        const adAccount = getAdAccount();
-        const params = {
-            limit: limit
-        };
-        if (status) {
-            params.filtering = [{ field: 'effective_status', operator: 'IN', value: [status] }];
-        }
-        if (adSetId) {
-            params.filtering = params.filtering || [];
-            params.filtering.push({ field: 'adset_id', operator: 'EQUAL', value: adSetId });
-        }
-        if (campaignId) {
-            params.filtering = params.filtering || [];
-            params.filtering.push({ field: 'campaign_id', operator: 'EQUAL', value: campaignId });
-        }
         const fields = ['id', 'name', 'status', 'effective_status', 'adset_id', 'campaign_id', 'creative', 'created_time', 'updated_time'];
-        const ads = await adAccount.getAds(fields, params);
-        const formattedAds = ads.map((ad) => ({
+        // Filtrování přes act_/ads nepodporuje pole adset_id/campaign_id → tahej z edge konkrétního
+        // ad setu / kampaně. Status se na serveru Mety filtrovat spolehlivě nedá → filtruj lokálně.
+        const params = { limit };
+        let ads;
+        if (adSetId) {
+            ads = await new facebook_nodejs_business_sdk_1.AdSet(adSetId).getAds(fields, params);
+        }
+        else if (campaignId) {
+            ads = await new facebook_nodejs_business_sdk_1.Campaign(campaignId).getAds(fields, params);
+        }
+        else {
+            ads = await getAdAccount().getAds(fields, params);
+        }
+        let formattedAds = ads.map((ad) => ({
             id: ad.id,
             name: ad._data?.name,
             status: ad._data?.status,
@@ -430,6 +443,10 @@ const getAds = async (adSetId, campaignId, limit = 25, status) => {
             createdTime: ad._data?.created_time,
             updatedTime: ad._data?.updated_time
         }));
+        if (status) {
+            const s = status.toUpperCase();
+            formattedAds = formattedAds.filter(a => a.status === s || a.effectiveStatus === s);
+        }
         return {
             success: true,
             ads: formattedAds

@@ -46,12 +46,40 @@ export declare const updateAd: (adId: string, updates: {
     creativeId?: string;
 }) => Promise<{
     success: boolean;
-    adId: string;
-    message: string;
-} | {
-    success: boolean;
     message: string;
     adId?: undefined;
+} | {
+    success: boolean;
+    adId: string;
+    message: string;
+}>;
+export declare const getAd: (adId: string) => Promise<{
+    success: boolean;
+    message: string;
+    ad?: undefined;
+} | {
+    success: boolean;
+    ad: {
+        id: any;
+        name: any;
+        status: any;
+        effectiveStatus: any;
+        adSetId: any;
+        campaignId: any;
+        creativeId: any;
+        creativeName: any;
+        link: any;
+        ctaType: any;
+        ctaLink: any;
+        leadFormId: any;
+        message: any;
+        title: any;
+        videoId: any;
+        imageHash: any;
+        thumbnailUrl: any;
+        effectiveObjectStoryId: any;
+    };
+    message?: undefined;
 }>;
 export declare const deleteAd: (adId: string) => Promise<{
     success: boolean;

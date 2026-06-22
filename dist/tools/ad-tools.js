@@ -3,14 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteAd = exports.updateAd = exports.createAd = exports.createAdCreative = exports.uploadAdMedia = void 0;
+exports.deleteAd = exports.getAd = exports.updateAd = exports.createAd = exports.createAdCreative = exports.uploadAdMedia = void 0;
 const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const config_js_1 = require("../config.js");
 const fb_error_js_1 = require("./fb-error.js");
 // Graph API verze pro přímá HTTP volání (lze přepsat přes env, ať drží krok se SDK)
-const GRAPH_VERSION = process.env.FB_GRAPH_API_VERSION || 'v23.0';
+const GRAPH_VERSION = process.env.FB_GRAPH_API_VERSION || 'v25.0';
 // Helper: instance aktivního reklamního účtu (z auth vrstvy přes config)
 const getAdAccount = () => {
     if (!config_js_1.config.facebookAccountId) {
@@ -159,9 +159,11 @@ const createAd = async (adsetId, name, creativeId, status = 'PAUSED') => {
 };
 exports.createAd = createAd;
 // --- Úprava reklamy (název / status / kreativa) ---
+// Úprava reklamy (název / status / kreativa). Zápis jde přímo na Graph API + READ-AFTER-WRITE,
+// ať se nevrací optimistické „upraveno". Pozor: Meta swap kreativy na EXISTUJÍCÍ reklamě často
+// tiše neprovede – proto se creative_id ověřuje zpět a při nepropsání se vrací success:false.
 const updateAd = async (adId, updates) => {
     try {
-        ensureSdk();
         if (!adId)
             throw new Error('Chybí ad_id.');
         const params = {};
@@ -170,18 +172,96 @@ const updateAd = async (adId, updates) => {
         if (updates.status)
             params.status = updates.status;
         if (updates.creativeId)
-            params.creative = { creative_id: updates.creativeId };
+            params.creative = JSON.stringify({ creative_id: updates.creativeId });
         if (Object.keys(params).length === 0) {
             throw new Error('Nebyly zadány žádné změny (name / status / creativeId).');
         }
-        await new facebook_nodejs_business_sdk_1.Ad(adId).update([], params);
-        return { success: true, adId, message: `Reklama ${adId} byla upravena.` };
+        const token = (0, config_js_1.getActiveToken)();
+        if (!token)
+            throw new Error('Chybí access token (přihlas se k Facebooku).');
+        // 1) Zápis
+        const body = new URLSearchParams({ ...params, access_token: token });
+        const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${adId}`, { method: 'POST', body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data?.error) {
+            return { success: false, message: formatError(data, 'Chyba při úpravě reklamy') };
+        }
+        // 2) Read-after-write – ověř, že se změny opravdu propsaly
+        const vRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${adId}`
+            + `?fields=name,status,effective_status,creative{id}&access_token=${encodeURIComponent(token)}`);
+        const v = await vRes.json().catch(() => ({}));
+        if (v?.error)
+            return { success: false, message: formatError(v, 'Chyba při ověření úpravy reklamy') };
+        const mismatch = [];
+        if (updates.name && v.name !== updates.name) {
+            mismatch.push(`název (požadováno "${updates.name}", je "${v.name}")`);
+        }
+        if (updates.status && v.status !== updates.status) {
+            mismatch.push(`status (požadováno ${updates.status}, je ${v.status}, effective_status ${v.effective_status})`);
+        }
+        if (updates.creativeId && v.creative?.id !== updates.creativeId) {
+            mismatch.push(`kreativa se NEPŘEPNULA (požadováno ${updates.creativeId}, je ${v.creative?.id}). `
+                + `Meta swap kreativy na existující reklamě běžně neprovede – vytvoř novou reklamu přes create_ad s cílovou kreativou`);
+        }
+        if (mismatch.length) {
+            return { success: false, adId, message: `Úprava reklamy se nepropsala: ${mismatch.join('; ')}.` };
+        }
+        return {
+            success: true, adId,
+            message: `Reklama ${adId} upravena. Název: "${v.name}", status: ${v.status} `
+                + `(effective_status: ${v.effective_status}), creative: ${v.creative?.id}.`
+        };
     }
     catch (error) {
         return { success: false, message: formatError(error, 'Chyba při úpravě reklamy') };
     }
 };
 exports.updateAd = updateAd;
+// Čtení reklamy zpět vč. kreativy (cílový odkaz, CTA, text, video/obrázek) – ať jde ověřit,
+// že změny reálně zabraly. Řeší „tiché" no-op chyby (swap kreativy, změna odkazu/textu).
+const getAd = async (adId) => {
+    try {
+        if (!adId)
+            throw new Error('Chybí ad_id.');
+        const token = (0, config_js_1.getActiveToken)();
+        if (!token)
+            throw new Error('Chybí access token (přihlas se k Facebooku).');
+        const fields = 'id,name,status,effective_status,adset_id,campaign_id,'
+            + 'creative{id,name,object_type,thumbnail_url,effective_object_story_id,object_story_spec,call_to_action_type,link_url,image_url,video_id}';
+        const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${adId}`
+            + `?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`);
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || d?.error)
+            return { success: false, message: formatError(d, 'Chyba při čtení reklamy') };
+        const cr = d.creative || {};
+        const oss = cr.object_story_spec || {};
+        const ld = oss.link_data || {};
+        const vd = oss.video_data || {};
+        const link = ld.link || vd.call_to_action?.value?.link || cr.link_url || null;
+        const ctaType = ld.call_to_action?.type || vd.call_to_action?.type || cr.call_to_action_type || null;
+        const ctaLink = ld.call_to_action?.value?.link || vd.call_to_action?.value?.link || null;
+        const leadFormId = ld.call_to_action?.value?.lead_gen_form_id || vd.call_to_action?.value?.lead_gen_form_id || null;
+        return {
+            success: true,
+            ad: {
+                id: d.id, name: d.name, status: d.status, effectiveStatus: d.effective_status,
+                adSetId: d.adset_id, campaignId: d.campaign_id,
+                creativeId: cr.id, creativeName: cr.name,
+                link, ctaType, ctaLink, leadFormId,
+                message: ld.message || vd.message || null,
+                title: ld.name || vd.title || null,
+                videoId: vd.video_id || cr.video_id || null,
+                imageHash: ld.image_hash || null,
+                thumbnailUrl: cr.thumbnail_url || cr.image_url || null,
+                effectiveObjectStoryId: cr.effective_object_story_id || null,
+            }
+        };
+    }
+    catch (error) {
+        return { success: false, message: formatError(error, 'Chyba při čtení reklamy') };
+    }
+};
+exports.getAd = getAd;
 // --- Smazání reklamy (nevratné) ---
 const deleteAd = async (adId) => {
     try {

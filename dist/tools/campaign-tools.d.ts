@@ -25,6 +25,7 @@ export declare const getCampaigns: (limit?: number, status?: string) => Promise<
         name: any;
         objective: any;
         status: any;
+        effectiveStatus: any;
         createdTime: any;
         dailyBudget: number | null;
     }[];
@@ -56,7 +57,8 @@ export declare const getCampaignDetails: (campaignId: string) => Promise<{
         dailyBudget: number | null;
         lifetimeBudget: number | null;
         spendCap: number | null;
-        budgetRemaining: number | null;
+        spentToday: number | null;
+        remainingToday: number | null;
         buyingType: any;
         specialAdCategories: any;
         bidStrategy: any;

@@ -176,8 +176,9 @@ const initializeServer = async () => {
         responseText += campaign.dailyBudget ? `  - Denní rozpočet: ${campaign.dailyBudget}\n` : '';
         responseText += campaign.lifetimeBudget ? `  - Celoživotní rozpočet: ${campaign.lifetimeBudget}\n` : '';
         responseText += campaign.spendCap ? `  - Limit výdajů: ${campaign.spendCap}\n` : '';
-        responseText += campaign.budgetRemaining ? `  - Zbývající rozpočet: ${campaign.budgetRemaining}\n` : '';
-        if (!campaign.dailyBudget && !campaign.lifetimeBudget && !campaign.spendCap && !campaign.budgetRemaining) {
+        responseText += (campaign.spentToday != null) ? `  - Dnešní útrata: ${campaign.spentToday}\n` : '';
+        responseText += (campaign.remainingToday != null) ? `  - Zbývá dnes (orientačně): ${campaign.remainingToday}\n` : '';
+        if (!campaign.dailyBudget && !campaign.lifetimeBudget && !campaign.spendCap) {
             responseText += `  (Žádné informace o rozpočtu)\n`;
         }
         responseText += `\n- **Časové údaje:**\n`;
@@ -627,6 +628,29 @@ const initializeServer = async () => {
     }, async ({ ad_id }) => {
         const r = await adTools.deleteAd(ad_id);
         return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('get_ad', {
+        ad_id: zod_1.z.string().describe('ID reklamy – vrátí i kreativu: cílový odkaz, CTA, text, video/obrázek (pro ověření změn)')
+    }, async ({ ad_id }) => {
+        const r = await adTools.getAd(ad_id);
+        if (!r.success || !r.ad)
+            return { content: [{ type: 'text', text: `Chyba: ${r.message}` }] };
+        const a = r.ad;
+        const lines = [
+            `Reklama ${a.id} – "${a.name}"`,
+            `  Status: ${a.status} (effective: ${a.effectiveStatus})`,
+            `  Ad set: ${a.adSetId} | Kampaň: ${a.campaignId}`,
+            `  Kreativa: ${a.creativeId}${a.creativeName ? ` ("${a.creativeName}")` : ''}`,
+            a.link ? `  Cílový odkaz: ${a.link}` : null,
+            a.ctaType ? `  CTA: ${a.ctaType}${a.ctaLink ? ` → ${a.ctaLink}` : ''}` : null,
+            a.leadFormId ? `  Lead formulář: ${a.leadFormId}` : null,
+            a.title ? `  Titulek: ${a.title}` : null,
+            a.message ? `  Text: ${a.message}` : null,
+            a.videoId ? `  Video ID: ${a.videoId}` : null,
+            a.imageHash ? `  Image hash: ${a.imageHash}` : null,
+            a.effectiveObjectStoryId ? `  Post (object_story_id): ${a.effectiveObjectStoryId}` : null,
+        ].filter(Boolean);
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
     });
     // --- Registrace nástrojů pro lead formuláře (instant formuláře) a pixely ---
     server.tool('create_lead_form', {

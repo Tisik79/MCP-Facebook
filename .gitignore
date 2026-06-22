@@ -3,3 +3,5 @@ tokens.json
 fb-config.json
 .env
 *.log
+fb-config.json*
+.DS_Store

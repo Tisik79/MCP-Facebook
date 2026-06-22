@@ -97,7 +97,8 @@ node dist/index.js login
 | `get_adsets` | Seznam Ad Sets |
 | `create_ad_set` | Vytvoření Ad Set (vč. lead polí `promotedObject` / `destinationType`) |
 | `update_adset` | Úprava Ad Set (název / status) — reálný zápis + read-after-write |
-| `get_ads` | Seznam reklam |
+| `get_ads` | Seznam reklam (filtr přes adSetId/campaignId edge + status) |
+| `get_ad` | Detail reklamy vč. kreativy (odkaz, CTA, text, video/obrázek) |
 | `create_lead_form` | Vytvoření instant lead formuláře na stránce |
 | `get_lead_forms` | Seznam lead formulářů (`id`, `name`, `status`, `leads_count`) |
 | `get_pixels` | Pixely účtu (`id`, `name`) pro `promoted_object` |

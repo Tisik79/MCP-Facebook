@@ -81,35 +81,28 @@ const getCampaigns = async (limit = 10, status) => {
     try {
         const adAccount = getAdAccount();
         // Nastavení filtrů pro získání kampaní - optimalizovaná pole
-        const fields = ['id', 'name', 'objective', 'status', 'created_time', 'daily_budget'];
-        const params = {
-            limit
-        };
-        if (status) {
-            params.filtering = [
-                {
-                    field: 'status',
-                    operator: 'EQUAL',
-                    value: status
-                }
-            ];
-        }
+        const fields = ['id', 'name', 'objective', 'status', 'effective_status', 'created_time', 'daily_budget'];
+        // Pozn.: Graph API nepodporuje filtrování kampaní přes field 'status' operací EQUAL → při
+        // zadaném statusu načteme víc a filtrujeme lokálně.
+        const params = { limit: status ? Math.max(limit, 100) : limit };
         // Získání kampaní
         const campaigns = await adAccount.getCampaigns(fields, params);
-        // Formátování výsledků - access properties via _data
+        let mapped = campaigns.map((campaign) => ({
+            id: campaign.id, // ID is usually directly accessible
+            name: campaign._data?.name,
+            objective: campaign._data?.objective,
+            status: campaign._data?.status,
+            effectiveStatus: campaign._data?.effective_status,
+            createdTime: campaign._data?.created_time,
+            dailyBudget: campaign._data?.daily_budget ? campaign._data.daily_budget / 100 : null,
+        }));
+        if (status) {
+            const s = status.toUpperCase();
+            mapped = mapped.filter(c => c.status === s || c.effectiveStatus === s).slice(0, limit);
+        }
         return {
             success: true,
-            // Use 'any' type for campaign in map to bypass type incompatibility for now
-            campaigns: campaigns.map((campaign) => ({
-                id: campaign.id, // ID is usually directly accessible
-                name: campaign._data?.name,
-                objective: campaign._data?.objective,
-                status: campaign._data?.status,
-                createdTime: campaign._data?.created_time,
-                // startTime and stopTime removed as they are not used in the response
-                dailyBudget: campaign._data?.daily_budget ? campaign._data.daily_budget / 100 : null,
-                // lifetimeBudget removed as it's not used in the response
-            }))
+            campaigns: mapped
         };
     }
     catch (error) {
@@ -201,32 +194,46 @@ const getCampaignDetails = async (campaignId) => {
     try {
         // Získání objektu kampaně
         const campaign = new facebook_nodejs_business_sdk_1.Campaign(campaignId);
-        // Načtení detailů kampaně
+        // Načtení detailů kampaně. Pozn.: Meta pole `budget_remaining` je matoucí (kolísá nelogicky),
+        // proto ho nevracíme – místo něj počítáme orientační „zbývá dnes" = denní rozpočet − dnešní spend.
         const fields = [
             'id', 'name', 'objective', 'status', 'created_time',
             'start_time', 'stop_time', 'daily_budget', 'lifetime_budget',
-            'spend_cap', 'budget_remaining', 'buying_type', 'special_ad_categories',
+            'spend_cap', 'buying_type', 'special_ad_categories',
             'bid_strategy'
         ];
         const campaignDetails = await campaign.get(fields);
-        // Formátování výsledku - access properties via _data
+        const d = campaignDetails._data || {};
+        const dailyBudget = d.daily_budget ? d.daily_budget / 100 : null;
+        // Dnešní útrata (v TZ účtu) přes insights; guarded – když selže, jen vynecháme.
+        let spentToday = null;
+        try {
+            const ins = await campaign.getInsights(['spend'], { date_preset: 'today' });
+            if (ins && ins.length)
+                spentToday = parseFloat(ins[0]._data?.spend ?? ins[0].spend ?? '0');
+        }
+        catch { /* insights nemusí být k dispozici – nevadí */ }
+        const remainingToday = (dailyBudget != null && spentToday != null)
+            ? Math.max(0, Math.round((dailyBudget - spentToday) * 100) / 100)
+            : null;
         return {
             success: true,
             campaign: {
-                id: campaignDetails.id, // ID is usually directly accessible
-                name: campaignDetails._data?.name,
-                objective: campaignDetails._data?.objective,
-                status: campaignDetails._data?.status,
-                createdTime: campaignDetails._data?.created_time,
-                startTime: campaignDetails._data?.start_time,
-                stopTime: campaignDetails._data?.stop_time,
-                dailyBudget: campaignDetails._data?.daily_budget ? campaignDetails._data.daily_budget / 100 : null,
-                lifetimeBudget: campaignDetails._data?.lifetime_budget ? campaignDetails._data.lifetime_budget / 100 : null,
-                spendCap: campaignDetails._data?.spend_cap ? campaignDetails._data.spend_cap / 100 : null,
-                budgetRemaining: campaignDetails._data?.budget_remaining ? campaignDetails._data.budget_remaining / 100 : null,
-                buyingType: campaignDetails._data?.buying_type,
-                specialAdCategories: campaignDetails._data?.special_ad_categories,
-                bidStrategy: campaignDetails._data?.bid_strategy ?? null
+                id: campaignDetails.id,
+                name: d.name,
+                objective: d.objective,
+                status: d.status,
+                createdTime: d.created_time,
+                startTime: d.start_time,
+                stopTime: d.stop_time,
+                dailyBudget,
+                lifetimeBudget: d.lifetime_budget ? d.lifetime_budget / 100 : null,
+                spendCap: d.spend_cap ? d.spend_cap / 100 : null,
+                spentToday,
+                remainingToday, // orientačně: denní rozpočet − dnešní spend
+                buyingType: d.buying_type,
+                specialAdCategories: d.special_ad_categories,
+                bidStrategy: d.bid_strategy ?? null
             }
         };
     }

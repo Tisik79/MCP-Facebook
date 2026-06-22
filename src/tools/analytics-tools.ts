@@ -10,6 +10,20 @@ const getAdAccount = () => {
   return new AdAccount(config.facebookAccountId); 
 };
 
+// Některé metriky Meta vrací jako pole akcí [{action_type, value}, ...] (typicky video metriky:
+// video_thruplay_watched_actions, video_avg_time_watched_actions, actions, ...). Bez rozbalení
+// se v textu vypíšou jako [object Object]. Tahle funkce vrátí čitelnou hodnotu: u jedné akce
+// rovnou číslo, u více akcí součet + rozpad podle action_type.
+const serializeInsightValue = (value: any): any => {
+  if (!Array.isArray(value)) return value;
+  const entries = value.filter((x: any) => x && x.value !== undefined);
+  if (entries.length === 0) return value;
+  const total = entries.reduce((s: number, x: any) => s + (parseFloat(x.value) || 0), 0);
+  if (entries.length === 1) return total;
+  const breakdown = entries.map((x: any) => `${x.action_type}=${x.value}`).join(', ');
+  return `${total} (${breakdown})`;
+};
+
 // Získání insights (analytických dat) pro kampaň
 export const getCampaignInsights = async (
   campaignId: string,
@@ -52,7 +66,7 @@ export const getCampaignInsights = async (
           if (metric === 'spend') {
             result[metric] = parseFloat(insight[metric] || '0');
           } else {
-            result[metric] = insight[metric];
+            result[metric] = serializeInsightValue(insight[metric]);
           }
         }
       });
@@ -121,7 +135,7 @@ export const getAccountInsights = async (
           if (metric === 'spend') {
             result[metric] = parseFloat(insight[metric] || '0');
           } else {
-            result[metric] = insight[metric];
+            result[metric] = serializeInsightValue(insight[metric]);
           }
         }
       });
@@ -338,7 +352,7 @@ export const getAdSetInsights = async (
           if (metric === 'spend') {
             result[metric] = parseFloat(insight[metric] || '0');
           } else {
-            result[metric] = insight[metric];
+            result[metric] = serializeInsightValue(insight[metric]);
           }
         }
       });
@@ -398,7 +412,7 @@ export const getAdInsights = async (
           if (metric === 'spend') {
             result[metric] = parseFloat(insight[metric] || '0');
           } else {
-            result[metric] = insight[metric];
+            result[metric] = serializeInsightValue(insight[metric]);
           }
         }
       });
@@ -480,31 +494,20 @@ export const getAds = async (
   status?: string
 ) => {
   try {
-    const adAccount = getAdAccount();
-
-    const params: any = {
-      limit: limit
-    };
-
-    if (status) {
-      params.filtering = [{ field: 'effective_status', operator: 'IN', value: [status] }];
-    }
-
-    if (adSetId) {
-      params.filtering = params.filtering || [];
-      params.filtering.push({ field: 'adset_id', operator: 'EQUAL', value: adSetId });
-    }
-
-    if (campaignId) {
-      params.filtering = params.filtering || [];
-      params.filtering.push({ field: 'campaign_id', operator: 'EQUAL', value: campaignId });
-    }
-
     const fields = ['id', 'name', 'status', 'effective_status', 'adset_id', 'campaign_id', 'creative', 'created_time', 'updated_time'];
+    // Filtrování přes act_/ads nepodporuje pole adset_id/campaign_id → tahej z edge konkrétního
+    // ad setu / kampaně. Status se na serveru Mety filtrovat spolehlivě nedá → filtruj lokálně.
+    const params: any = { limit };
+    let ads: any[];
+    if (adSetId) {
+      ads = await new AdSet(adSetId).getAds(fields, params);
+    } else if (campaignId) {
+      ads = await new Campaign(campaignId).getAds(fields, params);
+    } else {
+      ads = await getAdAccount().getAds(fields, params);
+    }
 
-    const ads = await adAccount.getAds(fields, params);
-
-    const formattedAds = ads.map((ad: any) => ({
+    let formattedAds = ads.map((ad: any) => ({
       id: ad.id,
       name: ad._data?.name,
       status: ad._data?.status,
@@ -515,6 +518,11 @@ export const getAds = async (
       createdTime: ad._data?.created_time,
       updatedTime: ad._data?.updated_time
     }));
+
+    if (status) {
+      const s = status.toUpperCase();
+      formattedAds = formattedAds.filter(a => a.status === s || a.effectiveStatus === s);
+    }
 
     return {
       success: true,

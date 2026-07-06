@@ -1,23 +1,25 @@
 # Facebook Ads MCP Server
 
-MCP server pro správu Facebook reklam přímo z Claude AI. Bez ručního hledání tokenů — stačí se jednou přihlásit Facebookem.
+🇨🇿 [Česká verze](README.cs.md)
 
-## Funkce
+MCP server for managing Facebook ads straight from Claude AI. No manual token hunting — sign in with Facebook once and you're done.
 
-- Správa kampaní (vytváření, úpravy, mazání)
-- Ad Sets a jednotlivé reklamy
-- Analytika a insights
-- Vlastní publika a lookalike
-- Příspěvky na stránkách
-- Automatická správa tokenů (page tokeny jsou trvalé)
+## Features
 
-## Instalace
+- Campaign management (create, update, delete)
+- Ad sets and individual ads
+- Analytics and insights
+- Custom and lookalike audiences
+- Page posts
+- Automatic token management (page tokens are permanent)
 
-### Požadavky
+## Installation
+
+### Requirements
 - Node.js 18+
 - Claude Desktop
 
-### 1. Klonuj repozitář
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Tisik79/MCP-Facebook.git
@@ -26,115 +28,108 @@ npm install
 npm run build
 ```
 
-### 2. Přidej do Claude Desktop
+### 2. Add to Claude Desktop
 
-Otevři konfigurační soubor Claude Desktop:
+Open the Claude Desktop config file:
 - **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-Přidej:
+Add:
 
 ```json
 {
   "mcpServers": {
     "facebook-ads": {
       "command": "node",
-      "args": ["/CESTA/K/MCP-Facebook/dist/index.js"]
+      "args": ["/PATH/TO/MCP-Facebook/dist/index.js"]
     }
   }
 }
 ```
 
-### 3. První spuštění — setup za 5 minut
+### 3. First run — 5-minute setup
 
-Při prvním startu Claude Desktop tě průvodce provede vytvořením vlastní Facebook App:
+On first start, a wizard walks you through creating your own Facebook App:
 
 ```
-╔══════════════════════════════════════════════════════╗
-║       Facebook Ads MCP Server – první spuštění      ║
-╚══════════════════════════════════════════════════════╝
-
-Potřebuješ vlastní Facebook App (zdarma, 5 minut).
-Otevřu návod v prohlížeči...
-
-Postup:
-  1. Klikni "Vytvořit aplikaci"
-  2. Zvol typ: "Business"
-  3. Zadej libovolný název (např. "Moje reklamy")
-  4. Po vytvoření jdi do Nastavení → Základní
-  5. Zkopíruj App ID a App Secret
-  6. Přidej produkt "Facebook Login" a nastav:
+Steps:
+  1. Click "Create App"
+  2. Choose type: "Business"
+  3. Enter any name (e.g. "My Ads")
+  4. After creation, go to Settings → Basic
+  5. Copy the App ID and App Secret
+  6. Add the "Facebook Login" product and set:
      Valid OAuth Redirect URIs: http://localhost:3456/auth/callback
-  7. V Základním nastavení přidej do App Domains: localhost
+  7. In Basic settings, add "localhost" to App Domains
 ```
 
-Po zadání App ID a Secret se automaticky otevře prohlížeč → přihlásíš se Facebookem → hotovo.
+After entering the App ID and Secret, a browser opens automatically → sign in with Facebook → done.
 
-### Přihlášení znovu / přidání stránek
+### Re-login / adding pages
 
 ```bash
 node dist/index.js login
 ```
 
-## Použití v Claude
+## Usage in Claude
 
 ```
-"Zobraz mé aktivní kampaně"
-"Vytvoř kampaň pro SvobodnéReality s denním rozpočtem 200 Kč"
-"Jaký je výkon reklam za poslední měsíc?"
-"Přidej příspěvek na stránku XY"
+"Show my active campaigns"
+"Create a campaign for MyBrand with a $20 daily budget"
+"How did my ads perform last month?"
+"Post an update to page XY"
 ```
 
-## Dostupné nástroje
+## Available Tools
 
-| Nástroj | Popis |
-|---------|-------|
-| `list_connected_accounts` | Zobrazí propojené stránky a účty |
-| `get_campaigns` | Seznam kampaní |
-| `create_campaign` | Vytvoření nové kampaně |
-| `update_campaign` | Úprava kampaně |
-| `get_campaign_insights` | Analytika kampaně |
-| `get_adsets` | Seznam Ad Sets |
-| `create_ad_set` | Vytvoření Ad Set (vč. lead polí `promotedObject` / `destinationType`) |
-| `update_adset` | Úprava Ad Set (název / status) — reálný zápis + read-after-write |
-| `get_ads` | Seznam reklam (filtr přes adSetId/campaignId edge + status) |
-| `get_ad` | Detail reklamy vč. kreativy (odkaz, CTA, text, video/obrázek) |
-| `create_lead_form` | Vytvoření instant lead formuláře na stránce |
-| `get_lead_forms` | Seznam lead formulářů (`id`, `name`, `status`, `leads_count`) |
-| `get_pixels` | Pixely účtu (`id`, `name`) pro `promoted_object` |
-| `create_pixel` / `update_pixel` / `get_pixel` | Správa pixelů (detail vč. `last_fired_time`) |
-| `get_pixel_stats` | Statistiky událostí pixelu (kontrola, že eventy tečou) |
-| `search_interests` / `get_interest_suggestions` | Hledání a návrhy zájmů pro cílení |
-| `search_behaviors` | Kategorie chování pro cílení |
-| `search_geo_locations` | Geo klíče (region/city/zip) pro `targeting.geo_locations` |
-| `estimate_audience_size` | Odhad velikosti publika pro daný targeting |
-| `send_conversion_event` / `..._batch` | Conversions API — server-side eventy (auto SHA-256 hash PII) |
-| `get/create/update/delete_custom_conversion(s)` | Vlastní konverze (`custom_conversion_id` pro lead kampaně) |
-| `get/create_offline_conversion_set(s)`, `upload_offline_conversions` | Offline konverze z CRM |
-| `update_adcreative` | Úprava kreativy (name/status — obsah je immutable) |
-| `get_audiences` | Vlastní publika |
-| `create_custom_audience` | Vytvoření publika |
-| `create_lookalike_audience` | Lookalike publikum |
-| `create_post` | Příspěvek na stránku |
+| Tool | Description |
+|------|-------------|
+| `list_connected_accounts` | Show connected pages and ad accounts |
+| `get_campaigns` | List campaigns |
+| `create_campaign` | Create a new campaign |
+| `update_campaign` | Update a campaign |
+| `get_campaign_insights` | Campaign analytics |
+| `get_adsets` | List ad sets |
+| `create_ad_set` | Create an ad set (incl. lead fields `promotedObject` / `destinationType`) |
+| `update_adset` | Update an ad set (name / status) — real write + read-after-write verification |
+| `get_ads` | List ads (filtered via adSetId/campaignId edge + status) |
+| `get_ad` | Ad detail incl. creative (link, CTA, copy, video/image) |
+| `create_lead_form` | Create an instant lead form on a page |
+| `get_lead_forms` | List lead forms (`id`, `name`, `status`, `leads_count`) |
+| `get_pixels` | Account pixels (`id`, `name`) for `promoted_object` |
+| `create_pixel` / `update_pixel` / `get_pixel` | Pixel management (detail incl. `last_fired_time`) |
+| `get_pixel_stats` | Pixel event statistics (verify events are flowing) |
+| `search_interests` / `get_interest_suggestions` | Interest search & suggestions for targeting |
+| `search_behaviors` | Behavior categories for targeting |
+| `search_geo_locations` | Geo keys (region/city/zip) for `targeting.geo_locations` |
+| `estimate_audience_size` | Audience size estimate for a given targeting spec |
+| `send_conversion_event` / `..._batch` | Conversions API — server-side events (auto SHA-256 PII hashing) |
+| `get/create/update/delete_custom_conversion(s)` | Custom conversions (`custom_conversion_id` for lead campaigns) |
+| `get/create_offline_conversion_set(s)`, `upload_offline_conversions` | Offline conversions from your CRM |
+| `update_adcreative` | Update a creative (name/status — content is immutable) |
+| `get_audiences` | Custom audiences |
+| `create_custom_audience` | Create an audience |
+| `create_lookalike_audience` | Lookalike audience |
+| `create_post` | Page post |
 
-Rozsah targeting/konverzní sady je inspirován projektem
-[Draivix/aidvertaiser](https://github.com/Draivix/aidvertaiser) (David Strejc, MIT) — díky.
+The scope of the targeting/conversion tool set was inspired by
+[Draivix/aidvertaiser](https://github.com/Draivix/aidvertaiser) (David Strejc, MIT) — thanks!
 
-## Lead kampaně (OUTCOME_LEADS)
+## Lead Campaigns (OUTCOME_LEADS)
 
-Sběr leadů má dvě cesty; obě potřebují na ad setu `promotedObject` + `destinationType`:
+Lead collection has two paths; both require `promotedObject` + `destinationType` on the ad set:
 
-- **Webové konverze** — `optimizationGoal=OFFSITE_CONVERSIONS`, `destinationType=WEBSITE`,
-  `promotedObject={ pixel_id, custom_event_type: "LEAD" }` (Pixel ID zjistíš přes `get_pixels`).
-- **Instant formulář** — `optimizationGoal=LEAD_GENERATION`, `destinationType=ON_AD`,
-  `promotedObject={ page_id }`, kreativa s `call_to_action.value.lead_gen_form_id`
-  (formulář založíš přes `create_lead_form`).
+- **Website conversions** — `optimizationGoal=OFFSITE_CONVERSIONS`, `destinationType=WEBSITE`,
+  `promotedObject={ pixel_id, custom_event_type: "LEAD" }` (find your Pixel ID via `get_pixels`).
+- **Instant form** — `optimizationGoal=LEAD_GENERATION`, `destinationType=ON_AD`,
+  `promotedObject={ page_id }`, creative with `call_to_action.value.lead_gen_form_id`
+  (create the form via `create_lead_form`).
 
-Bez `promotedObject` + `destinationType` vrací Meta „Invalid parameter". U účtů s rozpočtem
-na úrovni kampaně (CBO) se **na ad setu rozpočet neuvádí** — dědí se z kampaně. Pokud kampaň
-používá cap strategii (`LOWEST_COST_WITH_BID_CAP`), ad set vyžaduje `bidAmount`; jinak nastav
-kampani `bidStrategy=LOWEST_COST_WITHOUT_CAP`.
+Without `promotedObject` + `destinationType`, Meta returns "Invalid parameter". For accounts
+with campaign-level budget (CBO), **do not set a budget on the ad set** — it inherits from the
+campaign. If the campaign uses a cap bid strategy (`LOWEST_COST_WITH_BID_CAP`), the ad set
+requires `bidAmount`; otherwise set the campaign to `bidStrategy=LOWEST_COST_WITHOUT_CAP`.
 
-## Licence
+## License
 
 MIT

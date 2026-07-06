@@ -1,148 +1,142 @@
 # Facebook Ads MCP Server
 
-MCP (Model Context Protocol) server pro zadávání a vyhodnocování reklamních kampaní na Facebooku s využitím Claude AI.
+🇬🇧 [English version](README.md)
 
-## Popis
-
-Tento MCP server poskytuje rozhraní pro komunikaci s Facebook Marketing API pomocí protokolu MCP. Umožňuje Claude AI a dalším LLM modelům pracovat s Facebook reklamami – vytvářet a spravovat kampaně, analyzovat výsledky a optimalizovat výkon.
+MCP server pro správu Facebook reklam přímo z Claude AI. Bez ručního hledání tokenů — stačí se jednou přihlásit Facebookem.
 
 ## Funkce
 
-- **Správa reklamních kampaní**
-  - Vytváření nových kampaní
-  - Získání seznamu existujících kampaní
-  - Úprava parametrů kampaní
-  - Odstranění kampaní
-
-- **Analytika a reportování**
-  - Získání přehledu o výkonu kampaní
-  - Srovnání více kampaní
-  - Analýza účtu
-  - Demografická analýza publika
-
-- **Správa publik**
-  - Vytváření vlastních publik
-  - Vytváření lookalike publik
-  - Správa seznamů uživatelů
-
-- **Správa příspěvků**
-  - Vytváření organických příspěvků na Facebook stránkách
-  - Podpora textových příspěvků, příspěvků s odkazy a příspěvků s obrázky
-
-- **AI asistence**
-  - Šablony promptů pro Claude AI
-  - Analýza výkonu kampaní
-  - Doporučení pro optimalizaci
-
-## Požadavky
-
-- Node.js (verze 18 nebo vyšší)
-- Facebook Business Manager účet
-- Facebook App s přístupem k Marketing API
-- Přístupový token s oprávněními pro Facebook Ads API (`ads_management`, `ads_read`) a Facebook Pages API (`pages_manage_posts`)
-- Claude AI nebo jiný LLM s podporou MCP
+- Správa kampaní (vytváření, úpravy, mazání)
+- Ad Sets a jednotlivé reklamy
+- Analytika a insights
+- Vlastní publika a lookalike
+- Příspěvky na stránkách
+- Automatická správa tokenů (page tokeny jsou trvalé)
 
 ## Instalace
 
-1. Klonujte repozitář:
+### Požadavky
+- Node.js 18+
+- Claude Desktop
+
+### 1. Klonuj repozitář
+
 ```bash
 git clone https://github.com/Tisik79/MCP-Facebook.git
 cd MCP-Facebook
-```
-
-2. Nainstalujte závislosti:
-```bash
 npm install
-```
-
-3. Zkopírujte soubor `.env.example` na `.env` a upravte ho:
-```bash
-cp .env.example .env
-```
-
-Poté upravte soubor `.env` a vložte do něj své přístupové údaje:
-```
-FACEBOOK_APP_ID=your_app_id
-FACEBOOK_APP_SECRET=your_app_secret
-FACEBOOK_ACCESS_TOKEN=your_access_token
-FACEBOOK_ACCOUNT_ID=your_ad_account_id
-PORT=3000
-```
-
-> **Bezpečnostní poznámka**: Nikdy neukládejte soubor `.env` do verzovacího systému. Soubor `.env` je již zahrnut v `.gitignore`.
-
-4. Zkompilujte TypeScript:
-```bash
 npm run build
 ```
 
-5. Spusťte server:
-```bash
-npm start
-```
+### 2. Přidej do Claude Desktop
 
-## Konfigurace pro Claude Desktop
+Otevři konfigurační soubor Claude Desktop:
+- **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-Pro použití tohoto MCP serveru s Claude Desktop přidejte následující konfiguraci do konfiguračního souboru Claude Desktop:
+Přidej:
 
 ```json
 {
   "mcpServers": {
     "facebook-ads": {
       "command": "node",
-      "args": ["cesta/k/facebook-ads-mcp-server/dist/index.js"],
-      "env": {
-        "FACEBOOK_APP_ID": "<YOUR_APP_ID>",
-        "FACEBOOK_APP_SECRET": "<YOUR_APP_SECRET>",
-        "FACEBOOK_ACCESS_TOKEN": "<YOUR_ACCESS_TOKEN>",
-        "FACEBOOK_ACCOUNT_ID": "<YOUR_AD_ACCOUNT_ID>"
-      }
+      "args": ["/CESTA/K/MCP-Facebook/dist/index.js"]
     }
   }
 }
 ```
 
+### 3. První spuštění — setup za 5 minut
+
+Při prvním startu Claude Desktop tě průvodce provede vytvořením vlastní Facebook App:
+
+```
+╔══════════════════════════════════════════════════════╗
+║       Facebook Ads MCP Server – první spuštění      ║
+╚══════════════════════════════════════════════════════╝
+
+Potřebuješ vlastní Facebook App (zdarma, 5 minut).
+Otevřu návod v prohlížeči...
+
+Postup:
+  1. Klikni "Vytvořit aplikaci"
+  2. Zvol typ: "Business"
+  3. Zadej libovolný název (např. "Moje reklamy")
+  4. Po vytvoření jdi do Nastavení → Základní
+  5. Zkopíruj App ID a App Secret
+  6. Přidej produkt "Facebook Login" a nastav:
+     Valid OAuth Redirect URIs: http://localhost:3456/auth/callback
+  7. V Základním nastavení přidej do App Domains: localhost
+```
+
+Po zadání App ID a Secret se automaticky otevře prohlížeč → přihlásíš se Facebookem → hotovo.
+
+### Přihlášení znovu / přidání stránek
+
+```bash
+node dist/index.js login
+```
+
+## Použití v Claude
+
+```
+"Zobraz mé aktivní kampaně"
+"Vytvoř kampaň pro SvobodnéReality s denním rozpočtem 200 Kč"
+"Jaký je výkon reklam za poslední měsíc?"
+"Přidej příspěvek na stránku XY"
+```
+
 ## Dostupné nástroje
 
-### Nástroje pro správu kampaní
-- `create_campaign` - Vytvoření nové reklamní kampaně
-- `get_campaigns` - Získání seznamu kampaní
-- `get_campaign_details` - Získání detailů o kampani
-- `update_campaign` - Aktualizace kampaně
-- `delete_campaign` - Odstranění kampaně
+| Nástroj | Popis |
+|---------|-------|
+| `list_connected_accounts` | Zobrazí propojené stránky a účty |
+| `get_campaigns` | Seznam kampaní |
+| `create_campaign` | Vytvoření nové kampaně |
+| `update_campaign` | Úprava kampaně |
+| `get_campaign_insights` | Analytika kampaně |
+| `get_adsets` | Seznam Ad Sets |
+| `create_ad_set` | Vytvoření Ad Set (vč. lead polí `promotedObject` / `destinationType`) |
+| `update_adset` | Úprava Ad Set (název / status) — reálný zápis + read-after-write |
+| `get_ads` | Seznam reklam (filtr přes adSetId/campaignId edge + status) |
+| `get_ad` | Detail reklamy vč. kreativy (odkaz, CTA, text, video/obrázek) |
+| `create_lead_form` | Vytvoření instant lead formuláře na stránce |
+| `get_lead_forms` | Seznam lead formulářů (`id`, `name`, `status`, `leads_count`) |
+| `get_pixels` | Pixely účtu (`id`, `name`) pro `promoted_object` |
+| `create_pixel` / `update_pixel` / `get_pixel` | Správa pixelů (detail vč. `last_fired_time`) |
+| `get_pixel_stats` | Statistiky událostí pixelu (kontrola, že eventy tečou) |
+| `search_interests` / `get_interest_suggestions` | Hledání a návrhy zájmů pro cílení |
+| `search_behaviors` | Kategorie chování pro cílení |
+| `search_geo_locations` | Geo klíče (region/city/zip) pro `targeting.geo_locations` |
+| `estimate_audience_size` | Odhad velikosti publika pro daný targeting |
+| `send_conversion_event` / `..._batch` | Conversions API — server-side eventy (auto SHA-256 hash PII) |
+| `get/create/update/delete_custom_conversion(s)` | Vlastní konverze (`custom_conversion_id` pro lead kampaně) |
+| `get/create_offline_conversion_set(s)`, `upload_offline_conversions` | Offline konverze z CRM |
+| `update_adcreative` | Úprava kreativy (name/status — obsah je immutable) |
+| `get_audiences` | Vlastní publika |
+| `create_custom_audience` | Vytvoření publika |
+| `create_lookalike_audience` | Lookalike publikum |
+| `create_post` | Příspěvek na stránku |
 
-### Nástroje pro správu reklamních sad (Ad Sets)
-- `create_ad_set` - Vytvoření nové reklamní sady
-- `get_adsets` - Získání seznamu reklamních sad s možností filtrování podle kampaně, stavu a limitu
+Rozsah targeting/konverzní sady je inspirován projektem
+[Draivix/aidvertaiser](https://github.com/Draivix/aidvertaiser) (David Strejc, MIT) — díky.
 
-### Nástroje pro správu reklam (Ads)
-- `get_ads` - Získání seznamu reklam s možností filtrování podle reklamní sady, kampaně, stavu a limitu
+## Lead kampaně (OUTCOME_LEADS)
 
-### Nástroje pro analýzu a vyhodnocování
-- `get_campaign_insights` - Získání analytických dat o kampani
-- `get_adset_insights` - Získání analytických dat o reklamní sadě
-- `get_ad_insights` - Získání analytických dat o jednotlivé reklamě
+Sběr leadů má dvě cesty; obě potřebují na ad setu `promotedObject` + `destinationType`:
 
-### Nástroje pro správu publik
-- `create_custom_audience` - Vytvoření vlastního publika
-- `get_audiences` - Získání seznamu publik
-- `create_lookalike_audience` - Vytvoření lookalike publika
+- **Webové konverze** — `optimizationGoal=OFFSITE_CONVERSIONS`, `destinationType=WEBSITE`,
+  `promotedObject={ pixel_id, custom_event_type: "LEAD" }` (Pixel ID zjistíš přes `get_pixels`).
+- **Instant formulář** — `optimizationGoal=LEAD_GENERATION`, `destinationType=ON_AD`,
+  `promotedObject={ page_id }`, kreativa s `call_to_action.value.lead_gen_form_id`
+  (formulář založíš přes `create_lead_form`).
 
-### Nástroje pro správu příspěvků
-- `create_post` - Vytvoření organického příspěvku na Facebook stránce (text, odkaz, obrázek)
-
-## Bezpečnost
-
-Tento MCP server vyžaduje přístup k vašemu Facebook Business Manager účtu prostřednictvím přístupového tokenu. Zajistěte, aby tento token byl bezpečně uložen a nebyl sdílen s neoprávněnými osobami.
-
-Pro produkční nasazení doporučujeme:
-- Používat token s minimálními potřebnými oprávněními
-- Používat proměnné prostředí pro citlivé údaje
-- Pravidelně obnovovat přístupové tokeny
-- Implementovat další vrstvy zabezpečení (firewall, VPN)
-- **Nikdy neukládat soubor `.env` do verzovacího systému**
-- Používat `.env.example` s placeholdery místo skutečných hodnot
+Bez `promotedObject` + `destinationType` vrací Meta „Invalid parameter". U účtů s rozpočtem
+na úrovni kampaně (CBO) se **na ad setu rozpočet neuvádí** — dědí se z kampaně. Pokud kampaň
+používá cap strategii (`LOWEST_COST_WITH_BID_CAP`), ad set vyžaduje `bidAmount`; jinak nastav
+kampani `bidStrategy=LOWEST_COST_WITHOUT_CAP`.
 
 ## Licence
 
-Distribuováno pod licencí MIT.
+MIT

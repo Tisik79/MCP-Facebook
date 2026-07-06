@@ -6,7 +6,7 @@ This guide explains how to connect and use the `facebook-ads-mcp-server` with th
 
 1.  **Node.js and npm**: Ensure you have Node.js (which includes npm) installed on your system. You can download it from [nodejs.org](https://nodejs.org/).
 2.  **Project Setup**: Clone or download the `MCP-Facebook` project directory.
-3.  **Dependencies**: Navigate to the project directory (`/Users/jantesnar/MCP-Facebook`) in your terminal and run `npm install` to install the necessary dependencies.
+3.  **Dependencies**: Navigate to the project directory (`/path/to/MCP-Facebook`) in your terminal and run `npm install` to install the necessary dependencies.
 4.  **Configuration**: Copy the `.env.example` file to `.env` in the root of the project directory and add your Facebook App credentials:
     ```bash
     cp .env.example .env
@@ -43,15 +43,15 @@ To allow Claude Desktop to communicate with this server, you need to add it to t
           "description": "Local MCP server for Facebook Ads Management",
           // Command to run the server using node and the compiled JS file
           // Make sure the path is correct for your system
-          "command": ["node", "/Users/jantesnar/MCP-Facebook/dist/index.js"],
+          "command": ["node", "/path/to/MCP-Facebook/dist/index.js"],
           // Optional: Specify the working directory if needed (usually the project root)
-          "cwd": "/Users/jantesnar/MCP-Facebook",
+          "cwd": "/path/to/MCP-Facebook",
           "enabled": true
         }
       ]
     }
     ```
-    *   **Important**: Ensure the path in the `command` array (`/Users/jantesnar/MCP-Facebook/dist/index.js`) is the correct absolute path to the compiled server script on your system.
+    *   **Important**: Ensure the path in the `command` array (`/path/to/MCP-Facebook/dist/index.js`) is the correct absolute path to the compiled server script on your system.
     *   If adding to an existing `servers` array, remember to add a comma after the preceding server object.
 
 3.  **Restart Claude Desktop**: Save the changes to `claude_desktop_config.json` and restart the Claude Desktop application for the changes to take effect.
@@ -89,7 +89,7 @@ Once configured, the "facebook-ads-mcp-local" server (or the name you chose) sho
 *   **Create a Campaign**: "Use the `facebook-ads-mcp-local` server to create a new campaign named 'Spring Sale Promo' with the objective 'LINK_CLICKS' and status 'PAUSED'. Set a daily budget of $20 (use '2000' for the tool parameter)."
 *   **List Active Campaigns**: "Using `facebook-ads-mcp-local`, list my active campaigns." (Uses `get_campaigns` with status filter)
 *   **Get Campaign Details**: "Get the details for campaign ID '123456789' using `facebook-ads-mcp-local`."
-*   **Create an Ad Set**: "Via `facebook-ads-mcp-local`, create an ad set named 'Website Visitors Retargeting' under campaign '987654321'. Set status to 'ACTIVE', optimization goal to 'OFFSITE_CONVERSIONS', billing event to 'IMPRESSIONS', and a daily budget of $10 (use 1000 for the tool parameter). For targeting, use `{ 'geo_locations': { 'countries': ['US'] } }`." (Note: Targeting object needs to be valid JSON according to Facebook API specs).
+*   **Create an Ad Set**: "Via `facebook-ads-mcp-local`, create an ad set named 'Website Visitors Retargeting' under campaign '987654321'. Set status to 'PAUSED' (recommended — activate manually after review), optimization goal to 'OFFSITE_CONVERSIONS', billing event to 'IMPRESSIONS'. Omit the ad-set budget if the campaign uses CBO (campaign-level budget). For targeting, use `{ 'geo_locations': { 'countries': ['US'] } }`." (Note: Targeting object needs to be valid JSON according to Facebook API specs).
 *   **Create a Lookalike Audience**: "Using `facebook-ads-mcp-local`, create a lookalike audience named 'Lookalike US 1%' based on source audience '111222333'. Target country 'US' and use the default 1% ratio."
 *   **Create an Organic Post**: "Using `facebook-ads-mcp-local`, create a new post on my Facebook Page with the content 'Exciting news! We're launching a new product next week. Stay tuned for more details!' and include the link 'https://example.com/new-product'."
 *   **Create a Post with Image**: "Using `facebook-ads-mcp-local`, create a new post on my Facebook Page with the content 'Check out our new office!' and include the image at '/path/to/office-image.jpg'."
@@ -100,3 +100,5 @@ Remember to replace example IDs, names, and values with your actual data. Refer 
 - `ads_management` for creating/modifying campaigns, ad sets, and audiences
 - `ads_read` for read-only operations
 - `pages_manage_posts` for creating organic posts on Facebook Pages
+- `pages_manage_ads` and `leads_retrieval` for lead forms and reading leads
+- `business_management` for account/business info

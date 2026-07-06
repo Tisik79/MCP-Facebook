@@ -31,7 +31,8 @@ const CONFIG_FILE_PATH = path_1.default.resolve(SERVER_DIR, 'fb-config.json');
 const AUTH_PORT = 3456;
 const GRAPH = 'https://graph.facebook.com/v25.0';
 const REDIRECT_URI = 'http://localhost:' + AUTH_PORT + '/auth/callback';
-const SCOPES = 'ads_management,ads_read,pages_manage_ads,pages_manage_posts,pages_read_engagement,pages_show_list,business_management';
+// leads_retrieval je nutné pro čtení leadů z instant formulářů (get_lead_forms / leads_count)
+const SCOPES = 'ads_management,ads_read,pages_manage_ads,pages_manage_posts,pages_read_engagement,pages_show_list,business_management,leads_retrieval';
 const LONG_TOKEN_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 dní
 function loadTokens() {
     if (!fs_1.default.existsSync(TOKENS_FILE))

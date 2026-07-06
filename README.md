@@ -84,16 +84,26 @@ node dist/index.js login
 
 | Tool | Description |
 |------|-------------|
-| `list_connected_accounts` | Show connected pages and ad accounts |
+| `connect_facebook_account` / `set_facebook_token` | Sign in via OAuth / store a token from Graph API Explorer |
+| `list_connected_accounts` / `set_active_account` | Show connected pages & accounts / switch the active one |
+| `facebook_setup_help` | Step-by-step connection guide |
 | `get_campaigns` | List campaigns |
 | `create_campaign` | Create a new campaign |
-| `update_campaign` | Update a campaign |
+| `update_campaign` | Update a campaign (incl. `bidStrategy`) — read-after-write |
+| `get_campaign_details` | Campaign detail (budget, bid_strategy, spend today) |
+| `delete_campaign` | Delete a campaign |
 | `get_campaign_insights` | Campaign analytics |
+| `get_adset_insights` / `get_ad_insights` | Ad set / ad level analytics |
 | `get_adsets` | List ad sets |
 | `create_ad_set` | Create an ad set (incl. lead fields `promotedObject` / `destinationType`) |
 | `update_adset` | Update an ad set (name / status) — real write + read-after-write verification |
 | `get_ads` | List ads (filtered via adSetId/campaignId edge + status) |
 | `get_ad` | Ad detail incl. creative (link, CTA, copy, video/image) |
+| `upload_ad_media` | Upload an image (`image_hash`) or video (`video_id`) |
+| `create_adcreative` | Create a creative from `object_story_spec` |
+| `create_ad` | Create an ad (defaults to PAUSED) |
+| `update_ad` | Update an ad (name/status/creative) — read-after-write |
+| `delete_ad` | Delete an ad |
 | `create_lead_form` | Create an instant lead form on a page |
 | `get_lead_forms` | List lead forms (`id`, `name`, `status`, `leads_count`) |
 | `get_pixels` | Account pixels (`id`, `name`) for `promoted_object` |
@@ -103,14 +113,16 @@ node dist/index.js login
 | `search_behaviors` | Behavior categories for targeting |
 | `search_geo_locations` | Geo keys (region/city/zip) for `targeting.geo_locations` |
 | `estimate_audience_size` | Audience size estimate for a given targeting spec |
-| `send_conversion_event` / `..._batch` | Conversions API — server-side events (auto SHA-256 PII hashing) |
-| `get/create/update/delete_custom_conversion(s)` | Custom conversions (`custom_conversion_id` for lead campaigns) |
-| `get/create_offline_conversion_set(s)`, `upload_offline_conversions` | Offline conversions from your CRM |
+| `send_conversion_event` / `send_conversion_events_batch` | Conversions API — server-side events (auto SHA-256 PII hashing) |
+| `get_custom_conversions` / `get_custom_conversion` | List / detail of custom conversions |
+| `create_custom_conversion` / `update_custom_conversion` / `delete_custom_conversion` | Custom conversions (`custom_conversion_id` for lead campaigns) |
+| `get_offline_conversion_sets` / `create_offline_conversion_set` / `upload_offline_conversions` | Offline conversions from your CRM |
 | `update_adcreative` | Update a creative (name/status — content is immutable) |
 | `get_audiences` | Custom audiences |
 | `create_custom_audience` | Create an audience |
 | `create_lookalike_audience` | Lookalike audience |
 | `create_post` | Page post |
+| `create_video_post` | Video page post (resumable upload, unpublished by default) |
 
 The scope of the targeting/conversion tool set was inspired by
 [Draivix/aidvertaiser](https://github.com/Draivix/aidvertaiser) (David Strejc, MIT) — thanks!

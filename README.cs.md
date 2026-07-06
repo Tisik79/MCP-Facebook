@@ -91,16 +91,26 @@ node dist/index.js login
 
 | Nástroj | Popis |
 |---------|-------|
-| `list_connected_accounts` | Zobrazí propojené stránky a účty |
+| `connect_facebook_account` / `set_facebook_token` | Přihlášení přes OAuth / uložení tokenu z Graph API Exploreru |
+| `list_connected_accounts` / `set_active_account` | Propojené stránky a účty / přepnutí aktivního |
+| `facebook_setup_help` | Návod na propojení krok za krokem |
 | `get_campaigns` | Seznam kampaní |
 | `create_campaign` | Vytvoření nové kampaně |
-| `update_campaign` | Úprava kampaně |
+| `update_campaign` | Úprava kampaně (vč. `bidStrategy`) — read-after-write |
+| `get_campaign_details` | Detail kampaně (rozpočet, bid_strategy, dnešní útrata) |
+| `delete_campaign` | Smazání kampaně |
 | `get_campaign_insights` | Analytika kampaně |
+| `get_adset_insights` / `get_ad_insights` | Analytika na úrovni ad setu / reklamy |
 | `get_adsets` | Seznam Ad Sets |
 | `create_ad_set` | Vytvoření Ad Set (vč. lead polí `promotedObject` / `destinationType`) |
 | `update_adset` | Úprava Ad Set (název / status) — reálný zápis + read-after-write |
 | `get_ads` | Seznam reklam (filtr přes adSetId/campaignId edge + status) |
 | `get_ad` | Detail reklamy vč. kreativy (odkaz, CTA, text, video/obrázek) |
+| `upload_ad_media` | Nahrání obrázku (`image_hash`) nebo videa (`video_id`) |
+| `create_adcreative` | Vytvoření kreativy z `object_story_spec` |
+| `create_ad` | Vytvoření reklamy (výchozí PAUSED) |
+| `update_ad` | Úprava reklamy (název/status/kreativa) — read-after-write |
+| `delete_ad` | Smazání reklamy |
 | `create_lead_form` | Vytvoření instant lead formuláře na stránce |
 | `get_lead_forms` | Seznam lead formulářů (`id`, `name`, `status`, `leads_count`) |
 | `get_pixels` | Pixely účtu (`id`, `name`) pro `promoted_object` |
@@ -110,14 +120,16 @@ node dist/index.js login
 | `search_behaviors` | Kategorie chování pro cílení |
 | `search_geo_locations` | Geo klíče (region/city/zip) pro `targeting.geo_locations` |
 | `estimate_audience_size` | Odhad velikosti publika pro daný targeting |
-| `send_conversion_event` / `..._batch` | Conversions API — server-side eventy (auto SHA-256 hash PII) |
-| `get/create/update/delete_custom_conversion(s)` | Vlastní konverze (`custom_conversion_id` pro lead kampaně) |
-| `get/create_offline_conversion_set(s)`, `upload_offline_conversions` | Offline konverze z CRM |
+| `send_conversion_event` / `send_conversion_events_batch` | Conversions API — server-side eventy (auto SHA-256 hash PII) |
+| `get_custom_conversions` / `get_custom_conversion` | Seznam / detail vlastních konverzí |
+| `create_custom_conversion` / `update_custom_conversion` / `delete_custom_conversion` | Vlastní konverze (`custom_conversion_id` pro lead kampaně) |
+| `get_offline_conversion_sets` / `create_offline_conversion_set` / `upload_offline_conversions` | Offline konverze z CRM |
 | `update_adcreative` | Úprava kreativy (name/status — obsah je immutable) |
 | `get_audiences` | Vlastní publika |
 | `create_custom_audience` | Vytvoření publika |
 | `create_lookalike_audience` | Lookalike publikum |
 | `create_post` | Příspěvek na stránku |
+| `create_video_post` | Video příspěvek (resumable upload, výchozí nepublikovaný) |
 
 Rozsah targeting/konverzní sady je inspirován projektem
 [Draivix/aidvertaiser](https://github.com/Draivix/aidvertaiser) (David Strejc, MIT) — díky.

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteAd = exports.getAd = exports.updateAd = exports.createAd = exports.createAdCreative = exports.uploadAdMedia = void 0;
+exports.deleteAd = exports.getAd = exports.updateAd = exports.createAd = exports.updateAdCreative = exports.createAdCreative = exports.uploadAdMedia = void 0;
 const facebook_nodejs_business_sdk_1 = require("facebook-nodejs-business-sdk");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -135,6 +135,45 @@ const createAdCreative = async (name, objectStorySpec) => {
     }
 };
 exports.createAdCreative = createAdCreative;
+// --- Úprava kreativy. Pozor: obsah kreativy (object_story_spec) je u Mety immutable –
+// měnit jde jen name a status. Pro jiný obsah vytvoř novou kreativu + novou reklamu. ---
+const updateAdCreative = async (creativeId, updates) => {
+    try {
+        if (!creativeId)
+            throw new Error('Chybí creative_id.');
+        const params = {};
+        if (updates.name)
+            params.name = updates.name;
+        if (updates.status)
+            params.status = updates.status;
+        if (Object.keys(params).length === 0) {
+            throw new Error('Nebyly zadány žádné změny (name / status). Obsah kreativy je immutable – vytvoř novou přes create_adcreative.');
+        }
+        const token = (0, config_js_1.getActiveToken)();
+        if (!token)
+            throw new Error('Chybí access token (přihlas se k Facebooku).');
+        const body = new URLSearchParams({ ...params, access_token: token });
+        const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${creativeId}`, { method: 'POST', body });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data?.error) {
+            return { success: false, message: formatError(data, 'Chyba při úpravě kreativy') };
+        }
+        // Read-after-write
+        const vRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${creativeId}`
+            + `?fields=id,name,status&access_token=${encodeURIComponent(token)}`);
+        const v = await vRes.json().catch(() => ({}));
+        if (v?.error)
+            return { success: false, message: formatError(v, 'Chyba při ověření úpravy kreativy') };
+        if (updates.name && v.name !== updates.name) {
+            return { success: false, message: `Úprava kreativy se nepropsala (název je "${v.name}").` };
+        }
+        return { success: true, creativeId, message: `Kreativa ${creativeId} upravena. Název: "${v.name}", status: ${v.status}.` };
+    }
+    catch (error) {
+        return { success: false, message: formatError(error, 'Chyba při úpravě kreativy') };
+    }
+};
+exports.updateAdCreative = updateAdCreative;
 // --- Vytvoření reklamy (Ad) v dané sadě; default PAUSED, nikdy nespouštět bez potvrzení ---
 const createAd = async (adsetId, name, creativeId, status = 'PAUSED') => {
     try {

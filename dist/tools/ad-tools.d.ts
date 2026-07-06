@@ -29,6 +29,18 @@ export declare const createAdCreative: (name: string, objectStorySpec: any) => P
     message: string;
     creativeId?: undefined;
 }>;
+export declare const updateAdCreative: (creativeId: string, updates: {
+    name?: string;
+    status?: string;
+}) => Promise<{
+    success: boolean;
+    message: string;
+    creativeId?: undefined;
+} | {
+    success: boolean;
+    creativeId: string;
+    message: string;
+}>;
 export declare const createAd: (adsetId: string, name: string, creativeId: string, status?: string) => Promise<{
     success: boolean;
     adId: any;

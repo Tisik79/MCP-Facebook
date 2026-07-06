@@ -132,6 +132,43 @@ export const createAdCreative = async (name: string, objectStorySpec: any) => {
   }
 };
 
+// --- Úprava kreativy. Pozor: obsah kreativy (object_story_spec) je u Mety immutable –
+// měnit jde jen name a status. Pro jiný obsah vytvoř novou kreativu + novou reklamu. ---
+export const updateAdCreative = async (
+  creativeId: string,
+  updates: { name?: string; status?: string }
+) => {
+  try {
+    if (!creativeId) throw new Error('Chybí creative_id.');
+    const params: any = {};
+    if (updates.name) params.name = updates.name;
+    if (updates.status) params.status = updates.status;
+    if (Object.keys(params).length === 0) {
+      throw new Error('Nebyly zadány žádné změny (name / status). Obsah kreativy je immutable – vytvoř novou přes create_adcreative.');
+    }
+    const token = getActiveToken();
+    if (!token) throw new Error('Chybí access token (přihlas se k Facebooku).');
+
+    const body = new URLSearchParams({ ...params, access_token: token });
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${creativeId}`, { method: 'POST', body });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok || data?.error) {
+      return { success: false, message: formatError(data, 'Chyba při úpravě kreativy') };
+    }
+    // Read-after-write
+    const vRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${creativeId}`
+      + `?fields=id,name,status&access_token=${encodeURIComponent(token)}`);
+    const v: any = await vRes.json().catch(() => ({}));
+    if (v?.error) return { success: false, message: formatError(v, 'Chyba při ověření úpravy kreativy') };
+    if (updates.name && v.name !== updates.name) {
+      return { success: false, message: `Úprava kreativy se nepropsala (název je "${v.name}").` };
+    }
+    return { success: true, creativeId, message: `Kreativa ${creativeId} upravena. Název: "${v.name}", status: ${v.status}.` };
+  } catch (error) {
+    return { success: false, message: formatError(error, 'Chyba při úpravě kreativy') };
+  }
+};
+
 // --- Vytvoření reklamy (Ad) v dané sadě; default PAUSED, nikdy nespouštět bez potvrzení ---
 export const createAd = async (
   adsetId: string,

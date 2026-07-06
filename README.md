@@ -102,10 +102,23 @@ node dist/index.js login
 | `create_lead_form` | Vytvoření instant lead formuláře na stránce |
 | `get_lead_forms` | Seznam lead formulářů (`id`, `name`, `status`, `leads_count`) |
 | `get_pixels` | Pixely účtu (`id`, `name`) pro `promoted_object` |
+| `create_pixel` / `update_pixel` / `get_pixel` | Správa pixelů (detail vč. `last_fired_time`) |
+| `get_pixel_stats` | Statistiky událostí pixelu (kontrola, že eventy tečou) |
+| `search_interests` / `get_interest_suggestions` | Hledání a návrhy zájmů pro cílení |
+| `search_behaviors` | Kategorie chování pro cílení |
+| `search_geo_locations` | Geo klíče (region/city/zip) pro `targeting.geo_locations` |
+| `estimate_audience_size` | Odhad velikosti publika pro daný targeting |
+| `send_conversion_event` / `..._batch` | Conversions API — server-side eventy (auto SHA-256 hash PII) |
+| `get/create/update/delete_custom_conversion(s)` | Vlastní konverze (`custom_conversion_id` pro lead kampaně) |
+| `get/create_offline_conversion_set(s)`, `upload_offline_conversions` | Offline konverze z CRM |
+| `update_adcreative` | Úprava kreativy (name/status — obsah je immutable) |
 | `get_audiences` | Vlastní publika |
 | `create_custom_audience` | Vytvoření publika |
 | `create_lookalike_audience` | Lookalike publikum |
 | `create_post` | Příspěvek na stránku |
+
+Rozsah targeting/konverzní sady je inspirován projektem
+[Draivix/aidvertaiser](https://github.com/Draivix/aidvertaiser) (David Strejc, MIT) — díky.
 
 ## Lead kampaně (OUTCOME_LEADS)
 

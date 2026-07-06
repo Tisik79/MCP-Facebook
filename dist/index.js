@@ -47,6 +47,9 @@ const adSetTools = __importStar(require("./tools/adset-tools.js")); // Import ne
 const postTools = __importStar(require("./tools/post-tools.js")); // Import post tools
 const adTools = __importStar(require("./tools/ad-tools.js")); // Import ad/creative/media tools
 const leadFormTools = __importStar(require("./tools/leadform-tools.js")); // Import lead form / pixel tools
+const targetingTools = __importStar(require("./tools/targeting-tools.js")); // Targeting research (zájmy, chování, geo, odhad publika)
+const pixelTools = __importStar(require("./tools/pixel-tools.js")); // Správa pixelů (create/update/detail/stats)
+const conversionTools = __importStar(require("./tools/conversion-tools.js")); // CAPI + custom/offline konverze
 // Návod, jak získat přístup k Facebooku. Plná verze: docs/FACEBOOK_APP_SETUP.md
 const FB_APP_SETUP_GUIDE = [
     '════════ JAK PŘIPOJIT FACEBOOK – NEJSNAZŠÍ ZPŮSOB (cca 1 minuta, bez nastavování aplikace) ════════',
@@ -693,6 +696,166 @@ const initializeServer = async () => {
             return { content: [{ type: 'text', text: `Chyba: ${r.message}` }] };
         const list = (r.pixels || []).map((px) => `  - ${px.name} (Pixel ID: ${px.id})`).join('\n');
         return { content: [{ type: 'text', text: `${r.message}\n${list}` }] };
+    });
+    // --- Targeting research (zájmy, chování, lokality, odhad publika) ---
+    const listText = (r, mapFn) => r.success ? `${r.message}\n` + (r.items || []).map(mapFn).join('\n') : `Chyba: ${r.message}`;
+    server.tool('search_interests', {
+        query: zod_1.z.string().describe('Hledaný výraz (např. "reality", "bydlení")'),
+        limit: zod_1.z.number().int().positive().optional().describe('Max výsledků (výchozí 25)')
+    }, async ({ query, limit }) => {
+        const r = await targetingTools.searchInterests(query, limit ?? 25);
+        return { content: [{ type: 'text', text: listText(r, (i) => `  - ${i.name} (id: ${i.id}, publikum: ${i.audience})${i.path ? ` [${i.path}]` : ''}`) }] };
+    });
+    server.tool('get_interest_suggestions', {
+        interest_names: zod_1.z.array(zod_1.z.string()).describe('Názvy zájmů, ke kterým chceš návrhy podobných (např. ["Real estate"])'),
+        limit: zod_1.z.number().int().positive().optional().describe('Max výsledků (výchozí 25)')
+    }, async ({ interest_names, limit }) => {
+        const r = await targetingTools.getInterestSuggestions(interest_names, limit ?? 25);
+        return { content: [{ type: 'text', text: listText(r, (i) => `  - ${i.name} (id: ${i.id}, publikum: ${i.audience})`) }] };
+    });
+    server.tool('search_behaviors', {
+        limit: zod_1.z.number().int().positive().optional().describe('Max výsledků (výchozí 50)')
+    }, async ({ limit }) => {
+        const r = await targetingTools.searchBehaviors(limit ?? 50);
+        return { content: [{ type: 'text', text: listText(r, (b) => `  - ${b.name} (id: ${b.id}, publikum: ${b.audience})${b.description ? ` – ${b.description}` : ''}`) }] };
+    });
+    server.tool('search_geo_locations', {
+        query: zod_1.z.string().describe('Hledaná lokalita (např. "Ostrava", "Moravskoslezský")'),
+        location_types: zod_1.z.array(zod_1.z.string()).optional().describe('Filtr typů: country, region, city, zip, geo_market (výchozí vše)'),
+        country_code: zod_1.z.string().optional().describe('Omezit na zemi (např. "CZ")'),
+        limit: zod_1.z.number().int().positive().optional().describe('Max výsledků (výchozí 25)')
+    }, async ({ query, location_types, country_code, limit }) => {
+        const r = await targetingTools.searchGeoLocations(query, location_types, country_code, limit ?? 25);
+        return { content: [{ type: 'text', text: listText(r, (g) => `  - ${g.name} (${g.type}, key: ${g.key})${g.region ? ` – ${g.region}` : ''}${g.countryCode ? `, ${g.countryCode}` : ''}`) }] };
+    });
+    server.tool('estimate_audience_size', {
+        targeting: zod_1.z.any().describe('Targeting spec (objekt jako u create_ad_set, např. { geo_locations: {...}, age_min, age_max })'),
+        optimization_goal: zod_1.z.string().optional().describe('Cíl optimalizace pro odhad (výchozí REACH; např. OFFSITE_CONVERSIONS, LEAD_GENERATION)')
+    }, async ({ targeting, optimization_goal }) => {
+        const r = await targetingTools.estimateAudienceSize(targeting, optimization_goal ?? 'REACH');
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    // --- Správa pixelů ---
+    server.tool('create_pixel', {
+        name: zod_1.z.string().describe('Název nového pixelu')
+    }, async ({ name }) => {
+        const r = await pixelTools.createPixel(name);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('update_pixel', {
+        pixel_id: zod_1.z.string().describe('ID pixelu'),
+        name: zod_1.z.string().describe('Nový název pixelu')
+    }, async ({ pixel_id, name }) => {
+        const r = await pixelTools.updatePixel(pixel_id, name);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('get_pixel', {
+        pixel_id: zod_1.z.string().describe('ID pixelu (detail vč. last_fired_time – kdy naposledy vystřelil event)')
+    }, async ({ pixel_id }) => {
+        const r = await pixelTools.getPixel(pixel_id);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('get_pixel_stats', {
+        pixel_id: zod_1.z.string().describe('ID pixelu'),
+        aggregation: zod_1.z.string().optional().describe('Agregace: event (výchozí), device_type, host, url, browser_type, pixel_fire')
+    }, async ({ pixel_id, aggregation }) => {
+        const r = await pixelTools.getPixelStats(pixel_id, aggregation ?? 'event');
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    // --- Conversions API (server-side eventy) ---
+    server.tool('send_conversion_event', {
+        pixel_id: zod_1.z.string().describe('ID pixelu'),
+        event_name: zod_1.z.string().describe('Název události (Lead, Purchase, CompleteRegistration, vlastní…)'),
+        user_data: zod_1.z.any().describe('Identifikátory uživatele: { em, ph, client_ip_address, client_user_agent, fbp, fbc, external_id… }. Email/telefon se automaticky hashují SHA-256.'),
+        event_time: zod_1.z.number().int().optional().describe('Unix timestamp události (výchozí teď)'),
+        event_id: zod_1.z.string().optional().describe('ID pro deduplikaci s browser pixelem (doporučeno)'),
+        event_source_url: zod_1.z.string().optional().describe('URL stránky, kde událost nastala'),
+        action_source: zod_1.z.string().optional().describe('Zdroj: website (výchozí), phone_call, email, crm, other…'),
+        custom_data: zod_1.z.any().optional().describe('Doplňková data: { value, currency, content_name… }'),
+        test_event_code: zod_1.z.string().optional().describe('Test Event Code z Events Manageru – event se zobrazí jen v test nástroji')
+    }, async (p) => {
+        const r = await conversionTools.sendConversionEvent({
+            pixelId: p.pixel_id, eventName: p.event_name, userData: p.user_data,
+            eventTime: p.event_time, eventId: p.event_id, eventSourceUrl: p.event_source_url,
+            actionSource: p.action_source, customData: p.custom_data, testEventCode: p.test_event_code,
+        });
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('send_conversion_events_batch', {
+        pixel_id: zod_1.z.string().describe('ID pixelu'),
+        events: zod_1.z.any().describe('Pole CAPI eventů dle schématu (event_name, event_time, user_data…). PII se hashuje automaticky.'),
+        test_event_code: zod_1.z.string().optional().describe('Test Event Code (volitelné)')
+    }, async ({ pixel_id, events, test_event_code }) => {
+        const r = await conversionTools.sendConversionEventsBatch(pixel_id, events, test_event_code);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    // --- Vlastní konverze ---
+    server.tool('get_custom_conversions', {}, async () => {
+        const r = await conversionTools.listCustomConversions();
+        return { content: [{ type: 'text', text: listText(r, (c) => `  - ${c.name} (ID: ${c.id}, event: ${c.eventType || 'rule'}, pixel: ${c.pixelId || '—'}${c.archived ? ', ARCHIVOVANÁ' : ''})`) }] };
+    });
+    server.tool('get_custom_conversion', {
+        conversion_id: zod_1.z.string().describe('ID vlastní konverze')
+    }, async ({ conversion_id }) => {
+        const r = await conversionTools.getCustomConversion(conversion_id);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('create_custom_conversion', {
+        name: zod_1.z.string().describe('Název konverze'),
+        pixel_id: zod_1.z.string().describe('ID pixelu (event source)'),
+        custom_event_type: zod_1.z.string().optional().describe('Standardní událost (LEAD, PURCHASE, COMPLETE_REGISTRATION…) – NEBO použij rule'),
+        rule: zod_1.z.any().optional().describe('Pravidlo (JSON), např. {"and":[{"event":{"eq":"PageView"}},{"URL":{"i_contains":"/dekujeme"}}]}'),
+        default_conversion_value: zod_1.z.number().optional().describe('Výchozí hodnota konverze (volitelné)')
+    }, async (p) => {
+        const r = await conversionTools.createCustomConversion({
+            name: p.name, pixelId: p.pixel_id, customEventType: p.custom_event_type,
+            rule: p.rule, defaultConversionValue: p.default_conversion_value,
+        });
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('update_custom_conversion', {
+        conversion_id: zod_1.z.string().describe('ID vlastní konverze'),
+        name: zod_1.z.string().optional().describe('Nový název'),
+        default_conversion_value: zod_1.z.number().optional().describe('Nová výchozí hodnota')
+    }, async ({ conversion_id, name, default_conversion_value }) => {
+        const r = await conversionTools.updateCustomConversion(conversion_id, { name, defaultConversionValue: default_conversion_value });
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('delete_custom_conversion', {
+        conversion_id: zod_1.z.string().describe('ID vlastní konverze – mazání je nevratné, jen po potvrzení')
+    }, async ({ conversion_id }) => {
+        const r = await conversionTools.deleteCustomConversion(conversion_id);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    // --- Offline konverze ---
+    server.tool('get_offline_conversion_sets', {}, async () => {
+        const r = await conversionTools.listOfflineConversionSets();
+        return { content: [{ type: 'text', text: listText(r, (s) => `  - ${s.name} (ID: ${s.id}${s.validEntries != null ? `, záznamů: ${s.validEntries}, spárováno: ${s.matchedEntries}` : ''})`) }] };
+    });
+    server.tool('create_offline_conversion_set', {
+        name: zod_1.z.string().describe('Název offline event setu'),
+        description: zod_1.z.string().optional().describe('Popis (volitelné)'),
+        business_id: zod_1.z.string().optional().describe('Business ID (výchozí z env FACEBOOK_BUSINESS_ID)')
+    }, async ({ name, description, business_id }) => {
+        const r = await conversionTools.createOfflineConversionSet(name, description, business_id);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    server.tool('upload_offline_conversions', {
+        set_id: zod_1.z.string().describe('ID offline event setu'),
+        upload_tag: zod_1.z.string().describe('Označení dávky (např. "leady-cerven-2026")'),
+        data: zod_1.z.any().describe('Pole eventů: [{ match_keys: { em, ph… }, event_time (unix), event_name, value?, currency? }]. PII se hashuje automaticky.')
+    }, async ({ set_id, upload_tag, data }) => {
+        const r = await conversionTools.uploadOfflineConversions(set_id, upload_tag, data);
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
+    });
+    // --- Úprava kreativy (jen name/status – obsah je immutable) ---
+    server.tool('update_adcreative', {
+        creative_id: zod_1.z.string().describe('ID kreativy'),
+        name: zod_1.z.string().optional().describe('Nový název'),
+        status: zod_1.z.string().optional().describe('Nový status (ACTIVE/DELETED). Pozn.: obsah kreativy změnit nejde – vytvoř novou přes create_adcreative.')
+    }, async ({ creative_id, name, status }) => {
+        const r = await adTools.updateAdCreative(creative_id, { name, status });
+        return { content: [{ type: 'text', text: r.success ? r.message : `Chyba: ${r.message}` }] };
     });
     // --- Registrace nástrojů pro správu příspěvků ---
     server.tool('create_video_post', {
